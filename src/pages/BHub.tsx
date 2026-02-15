@@ -4,6 +4,7 @@ import { LoginScreen } from '@/components/bhub/LoginScreen';
 import { ShiftManagement } from '@/components/bhub/ShiftManagement';
 import { BHubPOS } from '@/components/bhub/BHubPOS';
 import { User, Store, Shift } from '@/types/bhub';
+import { useStaffSession } from '@/contexts/StaffContext';
 
 type AppState = 'onboarding' | 'login' | 'shift-management' | 'pos';
 
@@ -12,6 +13,8 @@ export default function BHubApp() {
     const [currentUser, setCurrentUser] = useState<User | null>(null);
     const [currentStore, setCurrentStore] = useState<Store | null>(null);
     const [currentShift, setCurrentShift] = useState<Shift | null>(null);
+
+    const { setStaffSession } = useStaffSession();
 
     // Check if onboarding is complete
     useEffect(() => {
@@ -30,6 +33,13 @@ export default function BHubApp() {
     const handleLoginSuccess = (user: User, store: Store) => {
         setCurrentUser(user);
         setCurrentStore(store);
+
+        // Sync with Legacy System
+        setStaffSession({
+            id: user.id,
+            name: user.fullName,
+            role: user.role === 'admin' ? 'owner' : 'staff'
+        });
 
         // Check for active shift (mock check)
         const hasActiveShift = false; // TODO: Check backend for active shift

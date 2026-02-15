@@ -87,6 +87,26 @@ const Sidebar = () => {
 
       {/* Menu */}
       <nav className="flex-1 py-4 px-2 space-y-1 overflow-y-auto pos-scrollbar">
+        {/* Back to Home Button */}
+        <button
+          onClick={() => navigate('/')}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-bold uppercase tracking-tighter text-primary bg-primary/10 hover:bg-primary/20 mb-4 transition-all"
+        >
+          <ChevronLeft className="w-5 h-5 flex-shrink-0" />
+          <AnimatePresence>
+            {!collapsed && (
+              <motion.span
+                initial={{ opacity: 0, width: 0 }}
+                animate={{ opacity: 1, width: 'auto' }}
+                exit={{ opacity: 0, width: 0 }}
+                className="overflow-hidden whitespace-nowrap"
+              >
+                Back to Home / العودة للرئيسية
+              </motion.span>
+            )}
+          </AnimatePresence>
+        </button>
+
         {menuItems.map((item) => {
           const isActive = location.pathname === item.path;
           return (

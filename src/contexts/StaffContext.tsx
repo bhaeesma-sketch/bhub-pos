@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import type { StaffSession } from '@/components/pos/PinLogin';
 
 interface StaffContextValue {
@@ -8,13 +8,25 @@ interface StaffContextValue {
 
 const StaffContext = createContext<StaffContextValue>({
   staffSession: null,
-  setStaffSession: () => {},
+  setStaffSession: () => { },
 });
 
 export const useStaffSession = () => useContext(StaffContext);
 
 export const StaffProvider = ({ children }: { children: ReactNode }) => {
-  const [staffSession, setStaffSession] = useState<StaffSession | null>(null);
+  const [staffSession, setStaffSession] = useState<StaffSession | null>(() => {
+    const saved = localStorage.getItem('bhub_pos_session');
+    return saved ? JSON.parse(saved) : null;
+  });
+
+  useEffect(() => {
+    if (staffSession) {
+      localStorage.setItem('bhub_pos_session', JSON.stringify(staffSession));
+    } else {
+      localStorage.removeItem('bhub_pos_session');
+    }
+  }, [staffSession]);
+
   return (
     <StaffContext.Provider value={{ staffSession, setStaffSession }}>
       {children}
