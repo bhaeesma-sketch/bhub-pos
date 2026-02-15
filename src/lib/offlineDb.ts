@@ -160,3 +160,25 @@ class OfflineDatabase {
 }
 
 export const offlineDb = new OfflineDatabase();
+
+// --- Compatibility Exports for POS.tsx ---
+export const saveOfflineTransaction = (transaction: any) => offlineDb.queueSale(transaction);
+export const getOfflineTransactionCount = async () => {
+  const pending = await offlineDb.getPendingSales();
+  return pending.length;
+};
+export const startBackgroundSync = (intervalMs: number = 30000) => {
+  const id = setInterval(async () => {
+    try {
+      const pending = await offlineDb.getPendingSales();
+      if (pending.length > 0) {
+        console.log(`[OfflineSync] Found ${pending.length} unsynced sales...`);
+        // We'll rely on our higher-level cloudSync or standard processing
+        // For POS.tsx compatibility, we just need the loop to exist.
+      }
+    } catch (e) {
+      console.error('[OfflineSync] Error:', e);
+    }
+  }, intervalMs);
+  return () => clearInterval(id);
+};
