@@ -1,0 +1,32 @@
+
+> vite_react_shadcn_ts@0.0.0 build
+> vite build
+
+vite v5.4.19 building for production...
+transforming...
+Browserslist: browsers data (caniuse-lite) is 8 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+✓ 3878 modules transformed.
+x Build failed in 24.59s
+error during build:
+src/pages/POS.tsx (9:61): "startBackgroundSync" is not exported by "src/lib/offlineDb.ts", imported by "src/pages/POS.tsx".
+file: /Users/bhaeesma/Downloads/posbhaees/src/pages/POS.tsx:9:61
+
+ 7: import { toast } from 'sonner';
+ 8: import { QRCodeSVG } from 'qrcode.react';
+ 9: import { saveOfflineTransaction, getOfflineTransactionCount, startBackgroundSync } from '@/lib/offlineDb';
+                                                                 ^
+10: import type { Tables } from '@/integrations/supabase/types';
+11: import PinLogin, { type StaffSession } from '@/components/pos/PinLogin';
+
+    at getRollupError (file:///Users/bhaeesma/Downloads/posbhaees/node_modules/rollup/dist/es/shared/parseAst.js:395:41)
+    at error (file:///Users/bhaeesma/Downloads/posbhaees/node_modules/rollup/dist/es/shared/parseAst.js:391:42)
+    at Module.error (file:///Users/bhaeesma/Downloads/posbhaees/node_modules/rollup/dist/es/shared/node-entry.js:15535:16)
+    at Module.traceVariable (file:///Users/bhaeesma/Downloads/posbhaees/node_modules/rollup/dist/es/shared/node-entry.js:15984:29)
+    at ModuleScope.findVariable (file:///Users/bhaeesma/Downloads/posbhaees/node_modules/rollup/dist/es/shared/node-entry.js:13770:39)
+    at ReturnValueScope.findVariable (file:///Users/bhaeesma/Downloads/posbhaees/node_modules/rollup/dist/es/shared/node-entry.js:5252:38)
+    at FunctionBodyScope.findVariable (file:///Users/bhaeesma/Downloads/posbhaees/node_modules/rollup/dist/es/shared/node-entry.js:5252:38)
+    at ReturnValueScope.findVariable (file:///Users/bhaeesma/Downloads/posbhaees/node_modules/rollup/dist/es/shared/node-entry.js:5252:38)
+    at FunctionBodyScope.findVariable (file:///Users/bhaeesma/Downloads/posbhaees/node_modules/rollup/dist/es/shared/node-entry.js:5252:38)
+    at Identifier.bind (file:///Users/bhaeesma/Downloads/posbhaees/node_modules/rollup/dist/es/shared/node-entry.js:5035:40)

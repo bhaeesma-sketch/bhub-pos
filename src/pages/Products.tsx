@@ -1,0 +1,631 @@
+import { useState, useRef, useCallback, useMemo } from 'react';
+import { Search, Plus, Edit, Trash2, Package, Download, Upload, Loader2, Sparkles, AlertTriangle } from 'lucide-react';
+import { useProducts, useCategories } from '@/hooks/useSupabaseData';
+import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
+import { Badge } from '@/components/ui/badge';
+import { supabase } from '@/integrations/supabase/client';
+import * as XLSX from 'xlsx';
+import { useQueryClient } from '@tanstack/react-query';
+import PageTransition from '@/components/animations/PageTransition';
+import ScrollReveal from '@/components/animations/ScrollReveal';
+import StaggerContainer, { StaggerItem } from '@/components/animations/StaggerContainer';
+import { motion } from 'framer-motion';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+
+const Products = () => {
+  const { data: productsList = [], isLoading } = useProducts();
+  const categories = useCategories();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterCategory, setFilterCategory] = useState('All Items');
+  const [importing, setImporting] = useState(false);
+  const [generatingImages, setGeneratingImages] = useState(false);
+  const [imageGenProgress, setImageGenProgress] = useState({ done: 0, total: 0 });
+  const fileRef = useRef<HTMLInputElement>(null);
+  const queryClient = useQueryClient();
+  const [addOpen, setAddOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<any>(null);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({
+    name: '', name_ar: '', barcode: '', sku: '', category: 'General',
+    cost: '', price: '', stock: '', min_stock: '5', unit: 'pcs',
+    supplier: '', is_weighted: false, expiry_date: '',
+  });
+
+  const resetForm = () => setForm({
+    name: '', name_ar: '', barcode: '', sku: '', category: 'General',
+    cost: '', price: '', stock: '', min_stock: '5', unit: 'pcs',
+    supplier: '', is_weighted: false, expiry_date: '',
+  });
+
+  const handleAddProduct = async () => {
+    if (!form.name.trim()) { toast.error('Product name is required'); return; }
+    if (!form.price || Number(form.price) <= 0) { toast.error('Valid price is required'); return; }
+    setSaving(true);
+    try {
+      const { error } = await supabase.from('products').insert({
+        name: form.name.trim(),
+        name_ar: form.name_ar.trim() || null,
+        barcode: form.barcode.trim() || null,
+        sku: form.sku.trim() || null,
+        category: form.category,
+        cost: Number(form.cost) || 0,
+        price: Number(form.price),
+        stock: Number(form.stock) || 0,
+        min_stock: Number(form.min_stock) || 5,
+        unit: form.unit,
+        supplier: form.supplier.trim() || null,
+        is_weighted: form.is_weighted,
+        expiry_date: form.expiry_date || null,
+      });
+      if (error) throw error;
+      toast.success('Product added!');
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      setAddOpen(false);
+      resetForm();
+    } catch (err: any) {
+      toast.error('Failed: ' + err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const openEditDialog = (product: any) => {
+    setEditingProduct(product);
+    setForm({
+      name: product.name || '',
+      name_ar: product.name_ar || '',
+      barcode: product.barcode || '',
+      sku: product.sku || '',
+      category: product.category || 'General',
+      cost: String(product.cost || ''),
+      price: String(product.price || ''),
+      stock: String(product.stock || ''),
+      min_stock: String(product.min_stock || '5'),
+      unit: product.unit || 'pcs',
+      supplier: product.supplier || '',
+      is_weighted: product.is_weighted || false,
+      expiry_date: product.expiry_date || '',
+    });
+    setEditOpen(true);
+  };
+
+  const handleEditProduct = async () => {
+    if (!editingProduct) return;
+    if (!form.name.trim()) { toast.error('Product name is required'); return; }
+    if (!form.price || Number(form.price) <= 0) { toast.error('Valid price is required'); return; }
+    setSaving(true);
+    try {
+      const { error } = await supabase.from('products').update({
+        name: form.name.trim(),
+        name_ar: form.name_ar.trim() || null,
+        barcode: form.barcode.trim() || null,
+        sku: form.sku.trim() || null,
+        category: form.category,
+        cost: Number(form.cost) || 0,
+        price: Number(form.price),
+        stock: Number(form.stock) || 0,
+        min_stock: Number(form.min_stock) || 5,
+        unit: form.unit,
+        supplier: form.supplier.trim() || null,
+        is_weighted: form.is_weighted,
+        expiry_date: form.expiry_date || null,
+      }).eq('id', editingProduct.id);
+      if (error) throw error;
+      toast.success('Product updated!');
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      setEditOpen(false);
+      setEditingProduct(null);
+      resetForm();
+    } catch (err: any) {
+      toast.error('Failed: ' + err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Generate AI images for products that don't have one
+  const generateProductImages = useCallback(async () => {
+    const productsWithoutImages = productsList.filter(p => !p.image_url);
+    if (productsWithoutImages.length === 0) {
+      toast.info('All products already have images!');
+      return;
+    }
+
+    setGeneratingImages(true);
+    setImageGenProgress({ done: 0, total: Math.min(productsWithoutImages.length, 50) });
+
+    // Process in batches of 50 max per session to avoid overload
+    const batch = productsWithoutImages.slice(0, 50);
+    let done = 0;
+
+    for (const product of batch) {
+      try {
+        const { data, error } = await supabase.functions.invoke('generate-product-image', {
+          body: { productId: product.id, productName: product.name, category: product.category },
+        });
+
+        if (error) {
+          console.error(`Image gen failed for ${product.name}:`, error);
+        } else {
+          done++;
+          setImageGenProgress({ done, total: batch.length });
+        }
+      } catch (err) {
+        console.error(`Image gen error for ${product.name}:`, err);
+      }
+    }
+
+    toast.success(`Generated ${done} product images!`);
+    queryClient.invalidateQueries({ queryKey: ['products'] });
+    setGeneratingImages(false);
+    setImageGenProgress({ done: 0, total: 0 });
+  }, [productsList, queryClient]);
+
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImporting(true);
+
+    try {
+      const data = await file.arrayBuffer();
+      const wb = XLSX.read(data);
+      let totalInserted = 0;
+
+      for (const sheetName of wb.SheetNames) {
+        const ws = wb.Sheets[sheetName];
+        const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1 });
+        if (rows.length < 2) continue;
+
+        // Find header row
+        const header = rows[0] as string[];
+        const nameIdx = header.findIndex(h => h && h.toString().toLowerCase().includes('product'));
+        const valueIdx = header.findIndex(h => h && h.toString().toLowerCase().includes('stock value'));
+        const stockIdx = header.findIndex(h => h && h.toString().toLowerCase().includes('in stock'));
+
+        if (nameIdx === -1 || stockIdx === -1) continue;
+
+        // Build markdown table for the edge function
+        const lines = ['|Product name|Total stock value|In Stock|'];
+        lines.push('|-|-|-|');
+
+        for (let i = 1; i < rows.length; i++) {
+          const row = rows[i];
+          const name = row[nameIdx]?.toString()?.trim();
+          if (!name) continue;
+          const val = Number(row[valueIdx >= 0 ? valueIdx : 1]) || 0;
+          const stock = Number(row[stockIdx]) || 0;
+          lines.push(`|${name.replace(/\|/g, '/')}|${val}|${stock}|`);
+        }
+
+        // Send in chunks of 500 lines
+        const CHUNK = 500;
+        const dataLines = lines.slice(2); // exclude header + separator
+        const headerLines = lines.slice(0, 2).join('\n');
+
+        for (let i = 0; i < dataLines.length; i += CHUNK) {
+          const chunk = dataLines.slice(i, i + CHUNK);
+          const markdown = headerLines + '\n' + chunk.join('\n');
+
+          const { data: result, error } = await supabase.functions.invoke('import-products', {
+            body: { markdown },
+          });
+
+          if (error) {
+            console.error('Import chunk error:', error);
+            toast.error(`Import error at batch ${Math.floor(i / CHUNK) + 1}`);
+          } else {
+            totalInserted += result.inserted || 0;
+            toast.info(`Imported ${totalInserted} products so far...`);
+          }
+        }
+      }
+
+      toast.success(`Import complete! ${totalInserted} products added.`);
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+    } catch (err: any) {
+      console.error('Import failed:', err);
+      toast.error('Import failed: ' + err.message);
+    } finally {
+      setImporting(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  };
+
+  const filtered = productsList.filter(p => {
+    const q = searchQuery.toLowerCase();
+    const matchSearch = p.name.toLowerCase().includes(q) || (p.barcode && p.barcode.includes(searchQuery)) || (p.sku && p.sku.toLowerCase().includes(q)) || (p.name_ar && p.name_ar.includes(searchQuery));
+    const matchCat = filterCategory === 'All Items' || p.category === filterCategory;
+    return matchSearch && matchCat;
+  });
+
+  const lowStock = productsList.filter(p => p.stock <= p.min_stock).length;
+  const totalValue = productsList.reduce((sum, p) => sum + (p.price * p.stock), 0);
+
+  // Expiry Watch: products expiring within 7 days
+  const now = new Date();
+  const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const nearExpiryProducts = useMemo(() => {
+    return productsList.filter(p => {
+      if (!p.expiry_date) return false;
+      const exp = new Date(p.expiry_date);
+      return exp <= sevenDaysFromNow && exp >= now;
+    });
+  }, [productsList, now, sevenDaysFromNow]);
+  const expiredProducts = useMemo(() => {
+    return productsList.filter(p => {
+      if (!p.expiry_date) return false;
+      return new Date(p.expiry_date) < now;
+    });
+  }, [productsList, now]);
+
+  if (isLoading) {
+    return <div className="flex items-center justify-center h-64"><p className="text-sm text-muted-foreground">Loading inventory...</p></div>;
+  }
+
+  return (
+    <PageTransition>
+      <div className="p-6 space-y-6">
+        <ScrollReveal type="fade-down">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold font-heading text-foreground">
+                <span className="text-primary text-glow">Inventory</span>
+              </h1>
+              <p className="text-sm text-muted-foreground">
+                {productsList.length} products · {lowStock} low stock · Value: OMR {totalValue.toFixed(3)}
+                {nearExpiryProducts.length > 0 && <span className="text-warning ml-2">⚠ {nearExpiryProducts.length} expiring soon</span>}
+                {expiredProducts.length > 0 && <span className="text-destructive ml-2">🚫 {expiredProducts.length} expired</span>}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={generateProductImages}
+                disabled={generatingImages}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gold/20 text-gold text-sm font-medium hover:bg-gold/30 transition-colors disabled:opacity-50"
+              >
+                {generatingImages ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                {generatingImages ? `Generating ${imageGenProgress.done}/${imageGenProgress.total}...` : 'AI Images'}
+              </button>
+              <button className="flex items-center gap-2 px-4 py-2 rounded-lg glass text-sm font-medium text-foreground hover:bg-muted/30 transition-colors">
+                <Download className="w-4 h-4" /> Export
+              </button>
+              <input
+                ref={fileRef}
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                className="hidden"
+                onChange={handleImport}
+              />
+              <button
+                onClick={() => fileRef.current?.click()}
+                disabled={importing}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg glass text-sm font-medium text-foreground hover:bg-muted/30 transition-colors disabled:opacity-50"
+              >
+                {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                {importing ? 'Importing...' : 'Import'}
+              </button>
+              <Dialog open={addOpen} onOpenChange={(o) => { setAddOpen(o); if (!o) resetForm(); }}>
+                <DialogTrigger asChild>
+                  <button className="flex items-center gap-2 px-4 py-2 rounded-lg gradient-cyan text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity glow-cyan">
+                    <Plus className="w-4 h-4" /> Add Product
+                  </button>
+                </DialogTrigger>
+                <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle>Add New Product</DialogTitle>
+                  </DialogHeader>
+                  <div className="grid gap-4 py-2">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="name">Name *</Label>
+                        <Input id="name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Product name" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="name_ar">Name (Arabic)</Label>
+                        <Input id="name_ar" dir="rtl" value={form.name_ar} onChange={e => setForm(f => ({ ...f, name_ar: e.target.value }))} placeholder="الاسم بالعربي" />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="barcode">Barcode</Label>
+                        <Input id="barcode" value={form.barcode} onChange={e => setForm(f => ({ ...f, barcode: e.target.value }))} placeholder="e.g. 6291234567890" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="sku">SKU</Label>
+                        <Input id="sku" value={form.sku} onChange={e => setForm(f => ({ ...f, sku: e.target.value }))} placeholder="e.g. MILK-001" />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label>Category</Label>
+                        <Select value={form.category} onValueChange={v => setForm(f => ({ ...f, category: v }))}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {categories.filter(c => c !== 'All Items').map(c => (
+                              <SelectItem key={c} value={c}>{c}</SelectItem>
+                            ))}
+                            {!categories.includes('General') && <SelectItem value="General">General</SelectItem>}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="supplier">Supplier</Label>
+                        <Input id="supplier" value={form.supplier} onChange={e => setForm(f => ({ ...f, supplier: e.target.value }))} placeholder="Supplier name" />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="cost">Cost (OMR)</Label>
+                        <Input id="cost" type="number" step="0.001" value={form.cost} onChange={e => setForm(f => ({ ...f, cost: e.target.value }))} placeholder="0.000" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="price">Price (OMR) *</Label>
+                        <Input id="price" type="number" step="0.001" value={form.price} onChange={e => setForm(f => ({ ...f, price: e.target.value }))} placeholder="0.000" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="stock">Stock</Label>
+                        <Input id="stock" type="number" value={form.stock} onChange={e => setForm(f => ({ ...f, stock: e.target.value }))} placeholder="0" />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="min_stock">Min Stock</Label>
+                        <Input id="min_stock" type="number" value={form.min_stock} onChange={e => setForm(f => ({ ...f, min_stock: e.target.value }))} placeholder="5" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Unit</Label>
+                        <Select value={form.unit} onValueChange={v => setForm(f => ({ ...f, unit: v }))}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="pcs">pcs</SelectItem>
+                            <SelectItem value="kg">kg</SelectItem>
+                            <SelectItem value="ltr">ltr</SelectItem>
+                            <SelectItem value="box">box</SelectItem>
+                            <SelectItem value="pack">pack</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="expiry">Expiry Date</Label>
+                        <Input id="expiry" type="date" value={form.expiry_date} onChange={e => setForm(f => ({ ...f, expiry_date: e.target.value }))} />
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Switch checked={form.is_weighted} onCheckedChange={v => setForm(f => ({ ...f, is_weighted: v }))} />
+                      <Label>Weighted item (sold by KG)</Label>
+                    </div>
+                    <Button onClick={handleAddProduct} disabled={saving} className="w-full">
+                      {saving ? <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Saving...</> : 'Add Product'}
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </div>
+          </div>
+        </ScrollReveal>
+
+        <ScrollReveal type="fade-up" delay={0.1}>
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="Search by name, barcode, SKU / البحث..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 rounded-lg glass border border-input text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+            <select
+              value={filterCategory}
+              onChange={(e) => setFilterCategory(e.target.value)}
+              className="px-4 py-2.5 rounded-lg glass border border-input text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              {categories.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+        </ScrollReveal>
+
+        <ScrollReveal type="scale" delay={0.15}>
+          <div className="glass-card rounded-xl overflow-hidden glow-cyan">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border/50 bg-muted/20">
+                    <th className="text-left p-4 font-medium text-muted-foreground">Product</th>
+                    <th className="text-left p-4 font-medium text-muted-foreground">SKU</th>
+                    <th className="text-left p-4 font-medium text-muted-foreground">Barcode</th>
+                    <th className="text-left p-4 font-medium text-muted-foreground">Category</th>
+                    <th className="text-right p-4 font-medium text-muted-foreground">Cost</th>
+                    <th className="text-right p-4 font-medium text-muted-foreground">Price</th>
+                    <th className="text-right p-4 font-medium text-muted-foreground">Stock</th>
+                    <th className="text-center p-4 font-medium text-muted-foreground">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.slice(0, 200).map((product, idx) => {
+                    const isNearExpiry = product.expiry_date && new Date(product.expiry_date) <= sevenDaysFromNow && new Date(product.expiry_date) >= now;
+                    const isExpired = product.expiry_date && new Date(product.expiry_date) < now;
+                    return (
+                      <motion.tr
+                        key={product.id}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ duration: 0.3, delay: Math.min(idx * 0.02, 0.6), ease: [0.16, 1, 0.3, 1] as [number, number, number, number] }}
+                        className={cn(
+                          "border-b border-border/30 hover:bg-muted/10 transition-colors",
+                          isExpired && "ring-2 ring-inset ring-destructive/40 bg-destructive/5",
+                          isNearExpiry && !isExpired && "ring-2 ring-inset ring-warning/40 bg-warning/5"
+                        )}
+                      >
+                        <td className="p-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-lg overflow-hidden flex-shrink-0 bg-muted/20">
+                              {product.image_url ? (
+                                <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center">
+                                  <Package className="w-4 h-4 text-primary" />
+                                </div>
+                              )}
+                            </div>
+                            <div>
+                              <span className="font-medium text-foreground">{product.name}</span>
+                              {product.name_ar && <p className="text-[10px] text-muted-foreground" dir="rtl">{product.name_ar}</p>}
+                              {isExpired && (
+                                <span className="inline-flex items-center gap-1 text-[10px] text-destructive font-bold mt-0.5">
+                                  <AlertTriangle className="w-3 h-3" /> EXPIRED {product.expiry_date}
+                                </span>
+                              )}
+                              {isNearExpiry && !isExpired && (
+                                <span className="inline-flex items-center gap-1 text-[10px] text-warning font-bold mt-0.5">
+                                  <AlertTriangle className="w-3 h-3" /> Expires {product.expiry_date}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="p-4 text-muted-foreground">{product.sku || '—'}</td>
+                        <td className="p-4 text-muted-foreground font-mono text-xs">{product.barcode || '—'}</td>
+                        <td className="p-4"><Badge variant="outline" className="text-xs border-border/50">{product.category}</Badge></td>
+                        <td className="p-4 text-right text-muted-foreground">OMR {product.cost.toFixed(3)}</td>
+                        <td className="p-4 text-right font-medium text-primary">OMR {product.price.toFixed(3)}</td>
+                        <td className="p-4 text-right">
+                          <span className={cn('px-2 py-1 rounded-full text-xs font-medium',
+                            product.stock <= product.min_stock ? 'bg-destructive/20 text-destructive' : 'bg-success/20 text-success'
+                          )}>
+                            {product.stock} {product.unit}
+                          </span>
+                        </td>
+                        <td className="p-4">
+                          <div className="flex items-center justify-center gap-2">
+                            <button onClick={() => openEditDialog(product)} className="p-1.5 rounded-lg hover:bg-muted/30 transition-colors text-muted-foreground hover:text-foreground">
+                              <Edit className="w-4 h-4" />
+                            </button>
+                            <button className="p-1.5 rounded-lg hover:bg-destructive/20 transition-colors text-muted-foreground hover:text-destructive">
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </motion.tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {filtered.length > 200 && (
+              <div className="flex items-center justify-center py-3 text-muted-foreground text-xs border-t border-border/30">
+                Showing 200 of {filtered.length} products. Use search to find specific items.
+              </div>
+            )}
+            {filtered.length === 0 && (
+              <div className="flex items-center justify-center py-12 text-muted-foreground text-sm">No products found</div>
+            )}
+          </div>
+        </ScrollReveal>
+
+        {/* Edit Product Dialog */}
+        <Dialog open={editOpen} onOpenChange={(o) => { setEditOpen(o); if (!o) { setEditingProduct(null); resetForm(); } }}>
+          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Edit Product</DialogTitle>
+            </DialogHeader>
+            <div className="grid gap-4 py-2">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-name">Name *</Label>
+                  <Input id="edit-name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Product name" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-name_ar">Name (Arabic)</Label>
+                  <Input id="edit-name_ar" dir="rtl" value={form.name_ar} onChange={e => setForm(f => ({ ...f, name_ar: e.target.value }))} placeholder="الاسم بالعربي" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-barcode">Barcode</Label>
+                  <Input id="edit-barcode" value={form.barcode} onChange={e => setForm(f => ({ ...f, barcode: e.target.value }))} placeholder="e.g. 6291234567890" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-sku">SKU</Label>
+                  <Input id="edit-sku" value={form.sku} onChange={e => setForm(f => ({ ...f, sku: e.target.value }))} placeholder="e.g. MILK-001" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Category</Label>
+                  <Select value={form.category} onValueChange={v => setForm(f => ({ ...f, category: v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {categories.filter(c => c !== 'All Items').map(c => (
+                        <SelectItem key={c} value={c}>{c}</SelectItem>
+                      ))}
+                      {!categories.includes('General') && <SelectItem value="General">General</SelectItem>}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-supplier">Supplier</Label>
+                  <Input id="edit-supplier" value={form.supplier} onChange={e => setForm(f => ({ ...f, supplier: e.target.value }))} placeholder="Supplier name" />
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-cost">Cost (OMR)</Label>
+                  <Input id="edit-cost" type="number" step="0.001" value={form.cost} onChange={e => setForm(f => ({ ...f, cost: e.target.value }))} placeholder="0.000" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-price">Price (OMR) *</Label>
+                  <Input id="edit-price" type="number" step="0.001" value={form.price} onChange={e => setForm(f => ({ ...f, price: e.target.value }))} placeholder="0.000" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-stock">Stock</Label>
+                  <Input id="edit-stock" type="number" value={form.stock} onChange={e => setForm(f => ({ ...f, stock: e.target.value }))} placeholder="0" />
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-min_stock">Min Stock</Label>
+                  <Input id="edit-min_stock" type="number" value={form.min_stock} onChange={e => setForm(f => ({ ...f, min_stock: e.target.value }))} placeholder="5" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Unit</Label>
+                  <Select value={form.unit} onValueChange={v => setForm(f => ({ ...f, unit: v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="pcs">pcs</SelectItem>
+                      <SelectItem value="kg">kg</SelectItem>
+                      <SelectItem value="ltr">ltr</SelectItem>
+                      <SelectItem value="box">box</SelectItem>
+                      <SelectItem value="pack">pack</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-expiry">Expiry Date</Label>
+                  <Input id="edit-expiry" type="date" value={form.expiry_date} onChange={e => setForm(f => ({ ...f, expiry_date: e.target.value }))} />
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <Switch checked={form.is_weighted} onCheckedChange={v => setForm(f => ({ ...f, is_weighted: v }))} />
+                <Label>Weighted item (sold by KG)</Label>
+              </div>
+              <Button onClick={handleEditProduct} disabled={saving} className="w-full">
+                {saving ? <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Saving...</> : 'Update Product'}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+    </PageTransition>
+  );
+};
+
+export default Products;
