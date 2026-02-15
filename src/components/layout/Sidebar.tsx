@@ -19,13 +19,14 @@ import logoIcon from '@/assets/logo-icon.png';
 import { useStaffSession } from '@/contexts/StaffContext';
 
 const allMenuItems = [
-  { icon: LayoutDashboard, label: 'Dashboard', path: '/', ownerOnly: true },
-  { icon: ShoppingCart, label: 'POS Terminal', path: '/pos', ownerOnly: false },
+  { icon: LayoutDashboard, label: 'Main Dashboard', path: '/', ownerOnly: true },
+  { icon: ShoppingCart, label: 'Classic POS', path: '/pos', ownerOnly: false },
+  { icon: Crown, label: 'B-HUB Cloud POS', path: '/bhub', ownerOnly: false },
+  { icon: Receipt, label: 'Khat (Daftar)', path: '/bhub/khat', ownerOnly: false },
   { icon: Package, label: 'Inventory', path: '/products', ownerOnly: false },
   { icon: Users, label: 'Customers', path: '/customers', ownerOnly: false },
-  { icon: Receipt, label: 'Sales', path: '/sales', ownerOnly: false },
-  { icon: BarChart3, label: 'Reports', path: '/reports', ownerOnly: true },
-  { icon: Smartphone, label: 'Owner View', path: '/owner', ownerOnly: true },
+  { icon: Receipt, label: 'Sales Records', path: '/sales', ownerOnly: false },
+  { icon: Smartphone, label: 'Remote Monitoring', path: '/bhub/owner/STORE001', ownerOnly: true },
   { icon: Settings, label: 'Settings', path: '/settings', ownerOnly: true },
 ];
 
