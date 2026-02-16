@@ -28,6 +28,7 @@ export interface Shift {
 
 export interface Product {
     id: string;
+    storeId?: string;
     sku: string;
     barcode: string;
     name: string;
@@ -36,7 +37,7 @@ export interface Product {
     price: number;
     cost: number;
     stock: number;
-    unit: 'piece' | 'kg' | 'pack' | 'carton';
+    unit: 'piece' | 'kg' | 'pack' | 'carton' | string;
     isWeightBased: boolean;
     isFastMoving: boolean;
     vatRate: number;
@@ -81,6 +82,7 @@ export interface Sale {
     change: number;
     timestamp: Date;
     receiptNumber: string;
+    synced?: number; // 0 = no, 1 = yes
 }
 
 export interface BarcodeData {

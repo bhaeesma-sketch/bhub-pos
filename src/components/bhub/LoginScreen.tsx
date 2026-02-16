@@ -1,5 +1,10 @@
 import React, { useState } from 'react';
+import { Smartphone, UserCircle, Lock, Building2, Crown, Sparkles } from 'lucide-react';
 import { Store, User } from '@/types/bhub';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface LoginScreenProps {
     onLoginSuccess: (user: User, store: Store) => void;
@@ -12,6 +17,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
     const [rememberStore, setRememberStore] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
+
 
     // Load remembered store on mount
     React.useEffect(() => {
@@ -28,34 +34,30 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
         setIsLoading(true);
 
         try {
-            // TODO: Replace with actual API call
-            // Simulating authentication
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            // Simulated authentication
+            await new Promise(resolve => setTimeout(resolve, 1500));
 
-            // Mock validation
             if (!storeId || !username || !password) {
                 throw new Error('All fields are required');
             }
 
-            if (password.length < 6) {
+            if (password.length < 4) {
                 throw new Error('Invalid credentials');
             }
 
-            // Save remembered store
             if (rememberStore) {
                 localStorage.setItem('bhub_remembered_store', storeId);
             } else {
                 localStorage.removeItem('bhub_remembered_store');
             }
 
-            // ✅ ROLE DETECTION: Owner vs Staff
             const isOwner = username.toLowerCase().includes('owner') ||
                 username.toLowerCase().includes('admin') ||
-                username.toLowerCase() === storeId.toLowerCase();
+                username.toLowerCase() === storeId.toLowerCase() ||
+                username.toLowerCase() === (localStorage.getItem('bhub_admin_username') || '').toLowerCase();
 
             const role = isOwner ? 'admin' : 'cashier';
 
-            // Mock user and store data
             const user: User = {
                 id: isOwner ? 'owner_1' : `staff_${Date.now()}`,
                 username,
@@ -71,9 +73,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                 taxNumber: 'OM1234567890',
             };
 
-            // Save auth token for cloud sync
             localStorage.setItem('bhub_auth_token', `${storeId}_${username}_${Date.now()}`);
-
             onLoginSuccess(user, store);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Login failed');
@@ -83,117 +83,155 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
     };
 
     return (
-        <div className="min-h-screen bg-[#121212] flex items-center justify-center p-4">
-            <div className="w-full max-w-md">
+        <div className="min-h-screen bg-background flex items-center justify-center p-4 relative overflow-hidden">
+            {/* Ambient Background Elements */}
+            <div className="absolute top-0 left-0 w-full h-full pointer-events-none opacity-30">
+                <div className="absolute top-[10%] left-[5%] w-64 h-64 bg-primary/20 rounded-full blur-[100px]" />
+                <div className="absolute bottom-[20%] right-[10%] w-96 h-96 bg-gold/10 rounded-full blur-[100px]" />
+            </div>
+
+            <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="w-full max-w-md z-10"
+            >
                 {/* Logo and Header */}
-                <div className="text-center mb-8">
-                    <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-[#D4AF37] to-[#FFD700] rounded-2xl mb-4">
-                        <span className="text-4xl font-bold text-[#121212]">B</span>
+                <div className="text-center mb-10">
+                    <motion.div
+                        initial={{ scale: 0.8 }}
+                        animate={{ scale: 1 }}
+                        className="inline-flex items-center justify-center w-20 h-20 gradient-cyan rounded-3xl mb-6 shadow-2xl relative"
+                    >
+                        <Smartphone className="w-10 h-10 text-white" />
+                        <div className="absolute -top-2 -right-2 w-6 h-6 bg-gold rounded-full flex items-center justify-center shadow-lg border-2 border-background">
+                            <Sparkles className="w-3 h-3 text-gold-foreground" />
+                        </div>
+                    </motion.div>
+                    <h1 className="text-4xl font-black text-foreground tracking-tighter font-heading text-glow">
+                        B-HUB <span className="text-gold">POS</span>
+                    </h1>
+                    <p className="text-muted-foreground font-medium mt-1">Cloud Retail Operations • Smart & Unified</p>
+                    <div className="flex items-center justify-center gap-2 mt-2">
+                        <div className="h-[1px] w-8 bg-border" />
+                        <span className="text-[10px] text-primary font-bold uppercase tracking-widest">نظام البيع السحابي الموحد</span>
+                        <div className="h-[1px] w-8 bg-border" />
                     </div>
-                    <h1 className="text-3xl font-bold text-white mb-2">B-HUB POS</h1>
-                    <p className="text-gray-400">Grocery Cloud System</p>
-                    <p className="text-[#D4AF37] text-sm mt-1">نظام نقاط البيع السحابي</p>
                 </div>
 
                 {/* Login Form */}
-                <div className="bg-[#1E1E1E] rounded-2xl shadow-2xl p-8 border border-gray-800">
-                    <form onSubmit={handleLogin} className="space-y-6">
-                        {/* Store ID */}
-                        <div>
-                            <label htmlFor="storeId" className="block text-sm font-medium text-gray-300 mb-2">
-                                Store ID / معرف المتجر
-                            </label>
-                            <input
-                                id="storeId"
-                                type="text"
-                                value={storeId}
-                                onChange={(e) => setStoreId(e.target.value)}
-                                className="w-full px-4 py-3 bg-[#2A2A2A] border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#D4AF37] focus:border-transparent transition"
-                                placeholder="Enter store ID"
-                                required
-                            />
-                        </div>
+                <div className="glass-card rounded-[2.5rem] p-10 glow-cyan relative overflow-hidden group">
+                    {/* Decorative shimmer */}
+                    <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/5 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
 
-                        {/* Username */}
-                        <div>
-                            <label htmlFor="username" className="block text-sm font-medium text-gray-300 mb-2">
-                                Username / اسم المستخدم
-                            </label>
-                            <input
-                                id="username"
-                                type="text"
-                                value={username}
-                                onChange={(e) => setUsername(e.target.value)}
-                                className="w-full px-4 py-3 bg-[#2A2A2A] border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#D4AF37] focus:border-transparent transition"
-                                placeholder="Enter username"
-                                required
-                            />
-                        </div>
+                    <form onSubmit={handleLogin} className="space-y-6 relative z-10">
+                        <div className="space-y-5 text-left">
+                            {/* Store ID */}
+                            <div className="space-y-2">
+                                <Label htmlFor="storeId" className="font-bold text-xs uppercase tracking-wider text-muted-foreground flex justify-between">
+                                    <span>Store ID / معرف المتجر</span>
+                                    <Building2 className="w-3 h-3" />
+                                </Label>
+                                <div className="relative">
+                                    <Input
+                                        id="storeId"
+                                        className="h-14 rounded-2xl glass border-border/40 focus:ring-primary/30 text-base font-semibold transition-all px-4"
+                                        placeholder="Enter Store ID"
+                                        value={storeId}
+                                        onChange={e => setStoreId(e.target.value)}
+                                        required
+                                    />
+                                </div>
+                            </div>
 
-                        {/* Password */}
-                        <div>
-                            <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-2">
-                                Password / كلمة المرور
-                            </label>
-                            <input
-                                id="password"
-                                type="password"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                className="w-full px-4 py-3 bg-[#2A2A2A] border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#D4AF37] focus:border-transparent transition"
-                                placeholder="Enter password"
-                                required
-                            />
-                        </div>
+                            {/* Username */}
+                            <div className="space-y-2">
+                                <Label htmlFor="username" className="font-bold text-xs uppercase tracking-wider text-muted-foreground flex justify-between">
+                                    <span>Username / اسم المستخدم</span>
+                                    <UserCircle className="w-3 h-3" />
+                                </Label>
+                                <div className="relative">
+                                    <Input
+                                        id="username"
+                                        className="h-14 rounded-2xl glass border-border/40 focus:ring-primary/30 text-base font-semibold transition-all px-4"
+                                        placeholder="Enter your username"
+                                        value={username}
+                                        onChange={e => setUsername(e.target.value)}
+                                        required
+                                    />
+                                </div>
+                            </div>
 
-                        {/* Remember Store */}
-                        <div className="flex items-center">
-                            <input
-                                id="remember"
-                                type="checkbox"
-                                checked={rememberStore}
-                                onChange={(e) => setRememberStore(e.target.checked)}
-                                className="w-4 h-4 text-[#D4AF37] bg-[#2A2A2A] border-gray-700 rounded focus:ring-[#D4AF37] focus:ring-2"
-                            />
-                            <label htmlFor="remember" className="ml-2 text-sm text-gray-300">
-                                Remember this store / تذكر هذا المتجر
-                            </label>
+                            {/* Password */}
+                            <div className="space-y-2">
+                                <Label htmlFor="password" className="font-bold text-xs uppercase tracking-wider text-muted-foreground flex justify-between">
+                                    <span>Password / كلمة المرور</span>
+                                    <Lock className="w-3 h-3" />
+                                </Label>
+                                <div className="relative">
+                                    <Input
+                                        id="password"
+                                        type="password"
+                                        className="h-14 rounded-2xl glass border-border/40 focus:ring-primary/30 text-base font-semibold transition-all px-4 tracking-widest"
+                                        placeholder="••••••••"
+                                        value={password}
+                                        onChange={e => setPassword(e.target.value)}
+                                        required
+                                    />
+                                </div>
+                            </div>
                         </div>
 
                         {/* Error Message */}
-                        {error && (
-                            <div className="bg-red-900/20 border border-red-500 text-red-400 px-4 py-3 rounded-lg text-sm">
-                                {error}
-                            </div>
-                        )}
+                        <AnimatePresence>
+                            {error && (
+                                <motion.div
+                                    initial={{ opacity: 0, height: 0 }}
+                                    animate={{ opacity: 1, height: 'auto' }}
+                                    className="bg-destructive/10 border border-destructive/20 text-destructive p-3 rounded-xl text-xs font-bold text-center"
+                                >
+                                    {error}
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
 
-                        {/* Submit Button */}
-                        <button
+                        <Button
                             type="submit"
                             disabled={isLoading}
-                            className="w-full bg-gradient-to-r from-[#D4AF37] to-[#FFD700] text-[#121212] font-bold py-4 px-6 rounded-lg hover:from-[#FFD700] hover:to-[#D4AF37] focus:outline-none focus:ring-2 focus:ring-[#D4AF37] focus:ring-offset-2 focus:ring-offset-[#1E1E1E] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+                            className="w-full h-16 rounded-2xl gradient-cyan text-white font-black text-lg transition-all active:scale-95 glow-cyan-strong flex items-center justify-center gap-3 group"
                         >
                             {isLoading ? (
-                                <span className="flex items-center justify-center">
-                                    <svg className="animate-spin h-5 w-5 mr-3" viewBox="0 0 24 24">
-                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                                    </svg>
-                                    Authenticating...
-                                </span>
+                                <>
+                                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                    <span>Authenticating...</span>
+                                </>
                             ) : (
-                                'LOGIN / تسجيل الدخول'
+                                <>
+                                    <span>LOG IN / دخول</span>
+                                    <Crown className="w-5 h-5 text-gold group-hover:rotate-12 transition-transform" />
+                                </>
                             )}
-                        </button>
+                        </Button>
                     </form>
 
-                    {/* Footer */}
-                    <div className="mt-6 text-center text-xs text-gray-500">
-                        <p>Powered by B-HUB Cloud • Version 2.0</p>
-                        <p className="mt-1">For support: support@bhub.om</p>
+                    {/* Action Links */}
+                    <div className="mt-8 pt-8 border-t border-border/30 text-center space-y-4">
+                        <button
+                            onClick={() => {
+                                localStorage.removeItem('bhub_onboarding_complete');
+                                window.location.reload();
+                            }}
+                            className="text-primary hover:text-primary/70 text-xs font-black tracking-widest uppercase transition-colors"
+                        >
+                            New Merchant? Launch Your Store
+                        </button>
+
+                        <div className="opacity-40 flex flex-col items-center gap-1">
+                            <p className="text-[10px] font-bold tracking-tight">POWERED BY B-HUB RETAIL CLOUD • OMAN</p>
+                            <p className="text-[9px] font-mono">v3.0.0-CONNECTED</p>
+                        </div>
                     </div>
                 </div>
-            </div>
+            </motion.div>
         </div>
     );
 };

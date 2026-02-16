@@ -13,14 +13,60 @@ import Sales from "./pages/Sales";
 import Reports from "./pages/Reports";
 import SettingsPage from "./pages/SettingsPage";
 import OwnerDashboard from "./pages/OwnerDashboard";
-import BHubApp from "./pages/BHub";
-import { ManagerDashboard } from "./components/bhub/ManagerDashboard";
-import { OwnerRemoteDashboard } from "./components/bhub/OwnerRemoteDashboard";
-import { InventoryManager } from "./components/bhub/InventoryManager";
+import { OnboardingFlow } from "./components/bhub/OnboardingFlow";
+import { LoginScreen } from "./components/bhub/LoginScreen";
+import { useStaffSession } from "./contexts/StaffContext";
+import { useState } from "react";
 import { KhatLedger } from "./components/bhub/KhatLedger";
+import { OwnerRemoteDashboard } from "./components/bhub/OwnerRemoteDashboard";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
+
+const RootRouter = () => {
+  const { staffSession, setStaffSession } = useStaffSession();
+  const [onboardingComplete, setOnboardingComplete] = useState(
+    () => localStorage.getItem('bhub_onboarding_complete') === 'true'
+  );
+
+  if (!onboardingComplete) {
+    return <OnboardingFlow onComplete={() => setOnboardingComplete(true)} />;
+  }
+
+  if (!staffSession) {
+    return (
+      <LoginScreen
+        onLoginSuccess={(user) => {
+          setStaffSession({
+            id: user.id,
+            name: user.fullName,
+            role: user.role === 'admin' ? 'owner' : 'staff',
+          });
+        }}
+      />
+    );
+  }
+
+  return (
+    <Routes>
+      <Route element={<AppLayout />}>
+        <Route path="/" element={<Dashboard />} />
+        <Route path="/pos" element={<POS />} />
+        <Route path="/products" element={<Products />} />
+        <Route path="/customers" element={<Customers />} />
+        <Route path="/sales" element={<Sales />} />
+        <Route path="/reports" element={<Reports />} />
+        <Route path="/owner" element={<OwnerDashboard />} />
+        <Route path="/settings" element={<SettingsPage />} />
+
+        {/* Integrated Cloud Features */}
+        <Route path="/bhub/khat" element={<KhatLedger />} />
+        <Route path="/bhub/owner/:storeId" element={<OwnerRemoteDashboard storeId="STORE001" />} />
+      </Route>
+      <Route path="*" element={<NotFound />} />
+    </Routes>
+  );
+};
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -29,27 +75,7 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
-          <Routes>
-            {/* B-HUB Grocery POS - Standalone Routes */}
-            <Route path="/bhub" element={<BHubApp />} />
-            <Route path="/bhub/manager" element={<ManagerDashboard />} />
-            <Route path="/bhub/owner/:storeId" element={<OwnerRemoteDashboard storeId={window.location.pathname.split('/').pop() || 'STORE001'} />} />
-            <Route path="/bhub/inventory" element={<InventoryManager />} />
-            <Route path="/bhub/khat" element={<KhatLedger />} />
-
-            {/* Original Dukkantek Routes */}
-            <Route element={<AppLayout />}>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/pos" element={<POS />} />
-              <Route path="/products" element={<Products />} />
-              <Route path="/customers" element={<Customers />} />
-              <Route path="/sales" element={<Sales />} />
-              <Route path="/reports" element={<Reports />} />
-              <Route path="/owner" element={<OwnerDashboard />} />
-              <Route path="/settings" element={<SettingsPage />} />
-            </Route>
-            <Route path="*" element={<NotFound />} />
-          </Routes>
+          <RootRouter />
         </BrowserRouter>
       </StaffProvider>
     </TooltipProvider>

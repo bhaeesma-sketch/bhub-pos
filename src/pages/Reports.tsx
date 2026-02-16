@@ -530,7 +530,7 @@ const Reports = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Reports & Analytics</h1>
-          <p className="text-sm text-muted-foreground">Comprehensive business reports – BHAEES POS</p>
+          <p className="text-sm text-muted-foreground">Comprehensive business reports – B-HUB POS</p>
         </div>
         <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-secondary text-secondary-foreground text-sm font-medium hover:bg-muted transition-colors">
           <Download className="w-4 h-4" /> Export Report
@@ -543,11 +543,10 @@ const Reports = () => {
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium transition-all ${
-              activeTab === tab.id
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium transition-all ${activeTab === tab.id
                 ? 'bg-primary text-primary-foreground shadow-sm'
                 : 'text-muted-foreground hover:text-foreground hover:bg-background'
-            }`}
+              }`}
           >
             <tab.icon className="w-3.5 h-3.5" />
             {tab.label}

@@ -165,4 +165,39 @@ export class SupabaseBackend {
             return null;
         }
     }
+
+    /**
+     * Bulk upsert products
+     */
+    static async upsertProducts(products: Product[]): Promise<void> {
+        try {
+            const upsertData = products.map(p => ({
+                id: p.id,
+                store_id: p.storeId,
+                sku: p.sku || p.barcode,
+                barcode: p.barcode,
+                name: p.name,
+                name_ar: p.nameAr || p.name,
+                category: p.category,
+                price: p.price,
+                cost: p.cost,
+                stock: p.stock,
+                unit: p.unit,
+                is_weight_based: p.isWeightBased,
+                is_fast_moving: p.isFastMoving,
+                vat_rate: p.vatRate,
+                updated_at: new Date().toISOString()
+            }));
+
+            const { error } = await supabase
+                .from('products')
+                .upsert(upsertData, { onConflict: 'barcode' });
+
+            if (error) throw error;
+            console.log(`✅ ${products.length} products upserted to Supabase`);
+        } catch (error) {
+            console.error('❌ Supabase upsert failed:', error);
+            throw error;
+        }
+    }
 }

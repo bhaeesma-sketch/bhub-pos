@@ -27,7 +27,7 @@ const PinLogin = ({ onLogin }: PinLoginProps) => {
       setError('');
       return;
     }
-    
+
     const newPin = pin + key;
     if (newPin.length > 4) return;
     setPin(newPin);
@@ -55,12 +55,29 @@ const PinLogin = ({ onLogin }: PinLoginProps) => {
         toast.success(`Welcome, ${data.name}!`, { description: `Logged in as ${data.role}` });
         onLogin({ id: data.id, name: data.name, role: data.role as StaffSession['role'] });
       } else {
-        setError('Invalid PIN');
-        setPin('');
+        // Fallback: Check if this matches the Master Owner PIN from onboarding
+        const masterPin = localStorage.getItem('bhub_admin_password');
+        const ownerName = localStorage.getItem('bhub_admin_username') || 'Master Owner';
+
+        if (enteredPin === masterPin) {
+          toast.success(`Welcome, ${ownerName}!`, { description: 'Authenticated via Master PIN' });
+          onLogin({ id: 'master_owner', name: ownerName, role: 'owner' });
+        } else {
+          setError('Invalid PIN');
+          setPin('');
+        }
       }
     } catch {
-      setError('Connection error');
-      setPin('');
+      // Offline fallback
+      const masterPin = localStorage.getItem('bhub_admin_password');
+      const ownerName = localStorage.getItem('bhub_admin_username') || 'Master Owner';
+      if (enteredPin === masterPin) {
+        toast.info('Offline access granted via Master PIN');
+        onLogin({ id: 'master_owner', name: ownerName, role: 'owner' });
+      } else {
+        setError('Connection error — check internet');
+        setPin('');
+      }
     } finally {
       setLoading(false);
     }
@@ -84,9 +101,9 @@ const PinLogin = ({ onLogin }: PinLoginProps) => {
         className="glass-card rounded-2xl p-8 w-full max-w-xs mx-4 text-center space-y-6"
       >
         <div>
-          <img src={logoIcon} alt="BHAEES" className="w-16 h-16 mx-auto mb-3 rounded-xl" />
+          <img src={logoIcon} alt="B-HUB" className="w-16 h-16 mx-auto mb-3 rounded-xl" />
           <h1 className="text-lg font-bold font-heading text-foreground">
-            <span className="text-primary text-glow">BHAEES</span> POS
+            <span className="text-primary text-glow">B-HUB</span> POS
           </h1>
           <p className="text-xs text-muted-foreground mt-1">Enter your 4-digit PIN</p>
         </div>

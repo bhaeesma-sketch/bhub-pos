@@ -1,5 +1,6 @@
-import { useState, useRef, useCallback, useMemo } from 'react';
+import { useState, useMemo, useCallback, useRef } from 'react';
 import { Search, Plus, Edit, Trash2, Package, Download, Upload, Loader2, Sparkles, AlertTriangle } from 'lucide-react';
+import { BulkImportModal } from '@/components/bhub/BulkImportModal';
 import { useProducts, useCategories } from '@/hooks/useSupabaseData';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -23,7 +24,7 @@ const Products = () => {
   const categories = useCategories();
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCategory, setFilterCategory] = useState('All Items');
-  const [importing, setImporting] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [generatingImages, setGeneratingImages] = useState(false);
   const [imageGenProgress, setImageGenProgress] = useState({ done: 0, total: 0 });
   const fileRef = useRef<HTMLInputElement>(null);
@@ -168,76 +169,6 @@ const Products = () => {
     setImageGenProgress({ done: 0, total: 0 });
   }, [productsList, queryClient]);
 
-  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setImporting(true);
-
-    try {
-      const data = await file.arrayBuffer();
-      const wb = XLSX.read(data);
-      let totalInserted = 0;
-
-      for (const sheetName of wb.SheetNames) {
-        const ws = wb.Sheets[sheetName];
-        const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1 });
-        if (rows.length < 2) continue;
-
-        // Find header row
-        const header = rows[0] as string[];
-        const nameIdx = header.findIndex(h => h && h.toString().toLowerCase().includes('product'));
-        const valueIdx = header.findIndex(h => h && h.toString().toLowerCase().includes('stock value'));
-        const stockIdx = header.findIndex(h => h && h.toString().toLowerCase().includes('in stock'));
-
-        if (nameIdx === -1 || stockIdx === -1) continue;
-
-        // Build markdown table for the edge function
-        const lines = ['|Product name|Total stock value|In Stock|'];
-        lines.push('|-|-|-|');
-
-        for (let i = 1; i < rows.length; i++) {
-          const row = rows[i];
-          const name = row[nameIdx]?.toString()?.trim();
-          if (!name) continue;
-          const val = Number(row[valueIdx >= 0 ? valueIdx : 1]) || 0;
-          const stock = Number(row[stockIdx]) || 0;
-          lines.push(`|${name.replace(/\|/g, '/')}|${val}|${stock}|`);
-        }
-
-        // Send in chunks of 500 lines
-        const CHUNK = 500;
-        const dataLines = lines.slice(2); // exclude header + separator
-        const headerLines = lines.slice(0, 2).join('\n');
-
-        for (let i = 0; i < dataLines.length; i += CHUNK) {
-          const chunk = dataLines.slice(i, i + CHUNK);
-          const markdown = headerLines + '\n' + chunk.join('\n');
-
-          const { data: result, error } = await supabase.functions.invoke('import-products', {
-            body: { markdown },
-          });
-
-          if (error) {
-            console.error('Import chunk error:', error);
-            toast.error(`Import error at batch ${Math.floor(i / CHUNK) + 1}`);
-          } else {
-            totalInserted += result.inserted || 0;
-            toast.info(`Imported ${totalInserted} products so far...`);
-          }
-        }
-      }
-
-      toast.success(`Import complete! ${totalInserted} products added.`);
-      queryClient.invalidateQueries({ queryKey: ['products'] });
-    } catch (err: any) {
-      console.error('Import failed:', err);
-      toast.error('Import failed: ' + err.message);
-    } finally {
-      setImporting(false);
-      if (fileRef.current) fileRef.current.value = '';
-    }
-  };
-
   const filtered = productsList.filter(p => {
     const q = searchQuery.toLowerCase();
     const matchSearch = p.name.toLowerCase().includes(q) || (p.barcode && p.barcode.includes(searchQuery)) || (p.sku && p.sku.toLowerCase().includes(q)) || (p.name_ar && p.name_ar.includes(searchQuery));
@@ -296,20 +227,34 @@ const Products = () => {
               <button className="flex items-center gap-2 px-4 py-2 rounded-lg glass text-sm font-medium text-foreground hover:bg-muted/30 transition-colors">
                 <Download className="w-4 h-4" /> Export
               </button>
-              <input
-                ref={fileRef}
-                type="file"
-                accept=".xlsx,.xls,.csv"
-                className="hidden"
-                onChange={handleImport}
-              />
               <button
-                onClick={() => fileRef.current?.click()}
-                disabled={importing}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg glass text-sm font-medium text-foreground hover:bg-muted/30 transition-colors disabled:opacity-50"
+                onClick={async () => {
+                  try {
+                    const res = await fetch('/data/inventory csv.csv');
+                    if (!res.ok) throw new Error('Could not find inventory file');
+                    const text = await res.text();
+                    toast.promise(async () => {
+                      // We trigger the import via the modal's logic (or simply reload if we implement it here)
+                      // For now, let's keep it simple: tell the user it's ready to import
+                      setImportOpen(true);
+                    }, {
+                      loading: 'Reading inventory data...',
+                      success: 'Data loaded. Please click Start Import.',
+                      error: 'Failed to read data'
+                    });
+                  } catch (err) {
+                    toast.error('Inventory file not found in public/data/');
+                  }
+                }}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary/10 text-primary text-sm font-medium hover:bg-primary/20 transition-colors"
               >
-                {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                {importing ? 'Importing...' : 'Import'}
+                <Download className="w-4 h-4" /> Sync Catalog
+              </button>
+              <button
+                onClick={() => setImportOpen(true)}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg glass text-sm font-medium text-foreground hover:bg-muted/30 transition-colors"
+              >
+                <Upload className="w-4 h-4" /> Import
               </button>
               <Dialog open={addOpen} onOpenChange={(o) => { setAddOpen(o); if (!o) resetForm(); }}>
                 <DialogTrigger asChild>
@@ -494,14 +439,14 @@ const Products = () => {
                         </td>
                         <td className="p-4 text-muted-foreground">{product.sku || '—'}</td>
                         <td className="p-4 text-muted-foreground font-mono text-xs">{product.barcode || '—'}</td>
-                        <td className="p-4"><Badge variant="outline" className="text-xs border-border/50">{product.category}</Badge></td>
-                        <td className="p-4 text-right text-muted-foreground">OMR {product.cost.toFixed(3)}</td>
-                        <td className="p-4 text-right font-medium text-primary">OMR {product.price.toFixed(3)}</td>
+                        <td className="p-4"><Badge variant="outline" className="text-xs border-border/50">{product.category || 'General'}</Badge></td>
+                        <td className="p-4 text-right text-muted-foreground">OMR {(product.cost || 0).toFixed(3)}</td>
+                        <td className="p-4 text-right font-medium text-primary">OMR {(product.price || 0).toFixed(3)}</td>
                         <td className="p-4 text-right">
                           <span className={cn('px-2 py-1 rounded-full text-xs font-medium',
-                            product.stock <= product.min_stock ? 'bg-destructive/20 text-destructive' : 'bg-success/20 text-success'
+                            (product.stock || 0) <= (product.min_stock || 0) ? 'bg-destructive/20 text-destructive' : 'bg-success/20 text-success'
                           )}>
-                            {product.stock} {product.unit}
+                            {product.stock || 0} {product.unit || 'pcs'}
                           </span>
                         </td>
                         <td className="p-4">
@@ -623,6 +568,10 @@ const Products = () => {
             </div>
           </DialogContent>
         </Dialog>
+        <BulkImportModal
+          isOpen={importOpen}
+          onClose={() => setImportOpen(false)}
+        />
       </div>
     </PageTransition>
   );

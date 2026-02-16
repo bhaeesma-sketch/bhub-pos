@@ -49,7 +49,7 @@ const Customers = () => {
           {filtered.map(customer => {
             const debt = Number(customer.total_debt);
             const debtLevel = debt > 50 ? 'red' : debt > 5 ? 'yellow' : 'green';
-            
+
             return (
               <StaggerItem key={customer.id}>
                 <div className="glass-card rounded-xl p-5 hover:glow-cyan transition-all">
@@ -73,7 +73,7 @@ const Customers = () => {
                     {customer.email && <div className="flex items-center gap-2"><Mail className="w-3.5 h-3.5" />{customer.email}</div>}
                     {customer.address && <div className="flex items-center gap-2"><MapPin className="w-3.5 h-3.5" />{customer.address}</div>}
                   </div>
-                  
+
                   {debt > 0 && (
                     <div className="mt-3 pt-3 border-t border-border/30">
                       <div className="flex items-center justify-between text-xs mb-1">
@@ -93,7 +93,7 @@ const Customers = () => {
                       </div>
                       {customer.phone && (
                         <a
-                          href={`https://wa.me/${customer.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Hi ${customer.name}, this is a friendly reminder from BHAEES. Your outstanding balance is OMR ${debt.toFixed(3)}. Please settle at your earliest convenience. Thank you!`)}`}
+                          href={`https://wa.me/${customer.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Hi ${customer.name}, this is a friendly reminder from B-HUB. Your outstanding balance is OMR ${debt.toFixed(3)}. Please settle at your earliest convenience. Thank you!`)}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="mt-2 flex items-center justify-center gap-1.5 w-full py-1.5 rounded-lg bg-success/15 text-success text-xs font-medium hover:bg-success/25 transition-colors"

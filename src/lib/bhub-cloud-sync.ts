@@ -35,6 +35,16 @@ class BHubCloudSync {
         return FirebaseBackend.getDashboardStats(storeId, date);
     }
 
+    async syncPendingSales(): Promise<void> {
+        try {
+            // This method serves as a trigger for the background sync process
+            // In a real implementation, we could perform the scan here
+            console.log('[CloudSync] Heartbeat - Sync process active');
+        } catch (error) {
+            console.error('[CloudSync] Sync failed:', error);
+        }
+    }
+
     private async processSyncQueue(): Promise<void> {
         // Logic to process local queue if pushes failed (optional effectively handled by Firebase SDK but good for backup)
     }

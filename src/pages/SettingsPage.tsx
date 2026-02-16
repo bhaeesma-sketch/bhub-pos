@@ -51,13 +51,13 @@ interface StaffMember {
 
 const SettingsPage = () => {
   const [activeTab, setActiveTab] = useState('store');
-  const [storeName, setStoreName] = useState('BHAEES POS');
+  const [storeName, setStoreName] = useState('B-HUB POS');
   const [storePhone, setStorePhone] = useState('+968 9867 5132');
   const [storeAddress, setStoreAddress] = useState('Muscat, Oman');
   const [storeEmail, setStoreEmail] = useState('bhaees25@gmail.com');
   const [taxRate, setTaxRate] = useState('5');
   const [currency, setCurrency] = useState('OMR');
-  const [receiptHeader, setReceiptHeader] = useState('BHAEES POS');
+  const [receiptHeader, setReceiptHeader] = useState('B-HUB POS');
   const [receiptFooter, setReceiptFooter] = useState('Thank you for shopping with us! شكرا لتسوقكم معنا');
 
   // Staff management state

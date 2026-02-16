@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { 
-  DollarSign, ShoppingCart, Users, TrendingUp, Lock, Unlock, 
-  Activity, Eye, EyeOff, LogOut, Wifi, WifiOff, 
+import {
+  DollarSign, ShoppingCart, Users, TrendingUp, Lock, Unlock,
+  Activity, Eye, EyeOff, LogOut, Wifi, WifiOff,
   AlertTriangle, Smartphone, BarChart3, Bell, ShieldAlert,
   Percent, Banknote, CheckCircle
 } from 'lucide-react';
@@ -54,7 +54,7 @@ const OwnerDashboard = () => {
   // Cash threshold alert with WhatsApp notification
   const sendWhatsAppAlert = () => {
     const msg = encodeURIComponent(
-      `⚠️ BHAEES POS Alert\n\nCash in drawer has reached OMR ${todayCashSales.toFixed(2)}.\nThreshold: OMR ${cashThreshold}\nTime: ${new Date().toLocaleString()}\n\nPlease clear the register.`
+      `⚠️ B-HUB POS Alert\n\nCash in drawer has reached OMR ${todayCashSales.toFixed(2)}.\nThreshold: OMR ${cashThreshold}\nTime: ${new Date().toLocaleString()}\n\nPlease clear the register.`
     );
     // Open first number directly (won't be blocked since it's a user gesture)
     window.location.href = `https://wa.me/${OWNER_WHATSAPP_NUMBERS[0]}?text=${msg}`;
@@ -82,7 +82,7 @@ const OwnerDashboard = () => {
         staff_name: 'System',
         action: 'cash_threshold_reached',
         details: `Cash in drawer reached OMR ${todayCashSales.toFixed(2)} (threshold: OMR ${cashThreshold}). WhatsApp notification sent to owner.`,
-      }).then(() => {});
+      }).then(() => { });
     }
   }, [todayCashSales, cashThreshold, cashAlertSent]);
 
@@ -163,7 +163,7 @@ const OwnerDashboard = () => {
             <Smartphone className="w-3 h-3" /> Mobile View
           </p>
         </div>
-        <button 
+        <button
           onClick={() => setIsOnline(!isOnline)}
           className="p-2 rounded-lg glass-card text-muted-foreground hover:text-foreground transition-colors"
         >

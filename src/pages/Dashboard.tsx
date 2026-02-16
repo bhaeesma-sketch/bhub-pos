@@ -55,11 +55,11 @@ const Dashboard = () => {
         <ScrollReveal type="blur" duration={0.8}>
           <ParallaxScroll speed={0.15}>
             <div className="relative rounded-2xl overflow-hidden glow-cyan" style={{ minHeight: 180 }}>
-              <img src={heroBanner} alt="BHAEES POS" className="w-full h-full object-cover absolute inset-0" style={{ minHeight: 180 }} />
+              <img src={heroBanner} alt="B-HUB POS" className="w-full h-full object-cover absolute inset-0" style={{ minHeight: 180 }} />
               <div className="relative z-10 p-8 flex items-center justify-between" style={{ minHeight: 180 }}>
                 <div>
                   <h1 className="text-xl sm:text-3xl font-bold font-heading text-foreground">
-                    <span className="text-primary text-glow">BHAEES</span>{' '}
+                    <span className="text-primary text-glow">B-HUB</span>{' '}
                     <span className="text-gold text-glow-gold">POS</span>
                   </h1>
                   <p className="text-sm text-muted-foreground mt-1">Welcome back! Here's your store overview.</p>
@@ -157,11 +157,10 @@ const Dashboard = () => {
                       </div>
                       <div className="text-right">
                         <p className="text-sm font-semibold text-foreground"><span className="text-gold">OMR</span> {Number(sale.total).toFixed(2)}</p>
-                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
-                          sale.status === 'paid' ? 'bg-success/20 text-success' :
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${sale.status === 'paid' ? 'bg-success/20 text-success' :
                           sale.status === 'refunded' ? 'bg-destructive/20 text-destructive' :
-                          'bg-warning/20 text-warning'
-                        }`}>
+                            'bg-warning/20 text-warning'
+                          }`}>
                           {sale.status}
                         </span>
                       </div>

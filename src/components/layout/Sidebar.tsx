@@ -19,14 +19,13 @@ import logoIcon from '@/assets/logo-icon.png';
 import { useStaffSession } from '@/contexts/StaffContext';
 
 const allMenuItems = [
-  { icon: LayoutDashboard, label: 'Main Dashboard', path: '/', ownerOnly: true },
-  { icon: ShoppingCart, label: 'Classic POS', path: '/pos', ownerOnly: false },
-  { icon: Crown, label: 'B-HUB Cloud POS', path: '/bhub', ownerOnly: false },
-  { icon: Receipt, label: 'Khat (Daftar)', path: '/bhub/khat', ownerOnly: false },
+  { icon: LayoutDashboard, label: 'Dashboard', path: '/', ownerOnly: true },
+  { icon: ShoppingCart, label: 'Terminal / POS', path: '/pos', ownerOnly: false },
+  { icon: Receipt, label: 'Digital Ledger', path: '/bhub/khat', ownerOnly: false },
   { icon: Package, label: 'Inventory', path: '/products', ownerOnly: false },
+  { icon: BarChart3, label: 'Analytics', path: '/reports', ownerOnly: true },
+  { icon: Smartphone, label: 'Remote Monitor', path: '/bhub/owner/STORE001', ownerOnly: true },
   { icon: Users, label: 'Customers', path: '/customers', ownerOnly: false },
-  { icon: Receipt, label: 'Sales Records', path: '/sales', ownerOnly: false },
-  { icon: Smartphone, label: 'Remote Monitoring', path: '/bhub/owner/STORE001', ownerOnly: true },
   { icon: Settings, label: 'Settings', path: '/settings', ownerOnly: true },
 ];
 
@@ -71,7 +70,7 @@ const Sidebar = () => {
               className="overflow-hidden whitespace-nowrap"
             >
               <h1 className="text-sm font-bold font-heading text-foreground tracking-tight">
-                <span className="text-primary">BHAEES</span>{' '}
+                <span className="text-primary">B-HUB</span>{' '}
                 <span className="text-gold">POS</span>
               </h1>
               <p className={cn(
@@ -87,26 +86,6 @@ const Sidebar = () => {
 
       {/* Menu */}
       <nav className="flex-1 py-4 px-2 space-y-1 overflow-y-auto pos-scrollbar">
-        {/* Back to Home Button */}
-        <button
-          onClick={() => navigate('/')}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-bold uppercase tracking-tighter text-primary bg-primary/10 hover:bg-primary/20 mb-4 transition-all"
-        >
-          <ChevronLeft className="w-5 h-5 flex-shrink-0" />
-          <AnimatePresence>
-            {!collapsed && (
-              <motion.span
-                initial={{ opacity: 0, width: 0 }}
-                animate={{ opacity: 1, width: 'auto' }}
-                exit={{ opacity: 0, width: 0 }}
-                className="overflow-hidden whitespace-nowrap"
-              >
-                Back to Home / العودة للرئيسية
-              </motion.span>
-            )}
-          </AnimatePresence>
-        </button>
-
         {menuItems.map((item) => {
           const isActive = location.pathname === item.path;
           return (

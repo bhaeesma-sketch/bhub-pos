@@ -1,5 +1,6 @@
-import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import { Search, Plus, Minus, Trash2, CreditCard, Banknote, Smartphone, User, Percent, Package, ShoppingCart, BookOpen, Printer, DoorOpen, Wifi, WifiOff, HardDrive, LogOut, ShieldAlert, AlertTriangle, Scale, Crown, PauseCircle, Play, Tag, ArrowLeft } from 'lucide-react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { Search, Plus, Minus, Trash2, CreditCard, Banknote, Smartphone, User, Percent, Package, ShoppingCart, BookOpen, Printer, DoorOpen, Wifi, WifiOff, HardDrive, LogOut, ShieldAlert, AlertTriangle, Scale, Crown, PauseCircle, Play, Tag, ArrowLeft, X } from 'lucide-react';
+import { Receipt } from '@/components/pos/Receipt';
 import Fuse from 'fuse.js';
 import { useProducts, useCustomers, useCategories } from '@/hooks/useSupabaseData';
 import { cn } from '@/lib/utils';
@@ -49,6 +50,8 @@ const ROW_HEIGHT = 210; // approximate card height in px
 
 // Parse Price-Embedded Barcodes (Prefix 20) — CAS CL5200 scale format
 // Format: 20PPPPPVVVVVC where P=product code (5 digits), V=price (5 digits, 3 decimal), C=check
+// Parse Price-Embedded Barcodes (Prefix 20) — CAS CL5200 scale format
+// Format: 20PPPPPVVVVVC where P=product code (5 digits), V=price (5 digits, 3 decimal), C=check
 const parseWeighBarcode = (barcode: string): { productCode: string; totalPrice: number } | null => {
   if (!barcode || barcode.length < 13 || !barcode.startsWith('20')) return null;
   const productCode = barcode.substring(2, 7); // digits 3-7
@@ -57,6 +60,13 @@ const parseWeighBarcode = (barcode: string): { productCode: string; totalPrice: 
   if (isNaN(totalPrice) || totalPrice <= 0) return null;
   return { productCode, totalPrice };
 };
+
+// Quick Add Categories for Dukkantek style manual entry
+const QUICK_ITEMS = [
+  { id: 'QA-BREAD', name: 'Fresh Bread', price: 0.100, icon: '🍞', color: 'bg-orange-100 border-orange-200 text-orange-700' },
+  { id: 'QA-MILK', name: 'Fresh Milk', price: 0.500, icon: '🥛', color: 'bg-blue-100 border-blue-200 text-blue-700' },
+  { id: 'QA-WATER', name: 'Water 500ml', price: 0.100, icon: '💧', color: 'bg-cyan-100 border-cyan-200 text-cyan-700' },
+];
 
 const POS = () => {
   const { staffSession, setStaffSession } = useStaffSession();
@@ -69,10 +79,12 @@ const POS = () => {
   const [activeCategory, setActiveCategory] = useState('All Items');
   const [selectedCustomer, setSelectedCustomer] = useState<string>('Walk-in Customer');
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
+  const [selectedCustomerPhone, setSelectedCustomerPhone] = useState<string>('');
+  const [showReceipt, setShowReceipt] = useState(false);
+  const [currentReceiptData, setCurrentReceiptData] = useState<any>(null);
   const [cartDiscount, setCartDiscount] = useState(0);
   const [showCustomerPicker, setShowCustomerPicker] = useState(false);
   const [showKhat, setShowKhat] = useState(false);
-  const [showQR, setShowQR] = useState(false);
   const [lastInvoice, setLastInvoice] = useState('');
   const [online, setOnline] = useState(navigator.onLine);
   const [pendingSync, setPendingSync] = useState(0);
@@ -144,10 +156,20 @@ const POS = () => {
         details: `Quick-switched to Admin mode via logo long-press`,
       }).then(() => { });
     } else {
-      toast.error('Invalid Owner PIN');
-      setAdminTogglePin('');
+      // Fallback
+      const masterPin = localStorage.getItem('bhub_admin_password');
+      if (pin === masterPin) {
+        const ownerName = localStorage.getItem('bhub_admin_username') || 'Master Owner';
+        setStaffSession({ id: 'master_owner', name: ownerName, role: 'owner' });
+        setShowAdminToggle(false);
+        setAdminTogglePin('');
+        toast.success(`👑 Admin mode activated via Master PIN`, { duration: 2000 });
+      } else {
+        toast.error('Invalid admin PIN');
+        setAdminTogglePin('');
+      }
     }
-  }, []);
+  }, [setStaffSession]);
 
   // Online/offline status
   useEffect(() => {
@@ -417,6 +439,42 @@ const POS = () => {
     }));
   };
 
+  const addToCartById = (productId: string) => {
+    const product = dbProducts.find(p => p.id === productId);
+    if (product) addToCart(product);
+  };
+
+  const addQuickItem = (item: typeof QUICK_ITEMS[0]) => {
+    // Check if product exists in DB with same name
+    const existingProduct = dbProducts.find(p => p.name.toLowerCase() === item.name.toLowerCase());
+    if (existingProduct) {
+      addToCart(existingProduct);
+      return;
+    }
+
+    const virtualProduct: DbProduct = {
+      id: item.id,
+      name: item.name,
+      price: item.price,
+      cost: 0,
+      stock: 9999,
+      barcode: '',
+      sku: '',
+      category: 'General',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      image_url: null,
+      min_stock: 0,
+      name_ar: item.name,
+      unit: 'piece',
+      is_weighted: false,
+      bulk_qty: null,
+      bulk_unit: null,
+      expiry_date: null,
+      supplier: null,
+    };
+    addToCart(virtualProduct);
+  };
   const removeFromCart = (productId: string) => {
     if (isStaffOnly) {
       const item = cart.find(i => i.product.id === productId);
@@ -499,8 +557,20 @@ const POS = () => {
         setPendingCheckoutMethod(null);
       }
     } else {
-      toast.error('Invalid owner PIN');
-      setOverridePin('');
+      // Fallback check against Master PIN
+      const masterPin = localStorage.getItem('bhub_admin_password');
+      if (pin === masterPin) {
+        setShowOwnerOverride(false);
+        setOverridePin('');
+        if (pendingCheckoutMethod) {
+          executeCheckout(pendingCheckoutMethod);
+          setPendingCheckoutMethod(null);
+        }
+        toast.success('Owner override approved via Master PIN');
+      } else {
+        toast.error('Invalid owner PIN');
+        setOverridePin('');
+      }
     }
   };
 
@@ -532,9 +602,32 @@ const POS = () => {
       synced: false,
     });
 
+    const receiptData = {
+      storeName: 'B-HUB POS',
+      vatin: 'OM1234567890',
+      invoiceNo,
+      date: new Date().toISOString(),
+      items: cart.map(i => ({
+        name: i.product.name,
+        nameAr: i.product.name_ar || i.product.name,
+        quantity: i.quantity,
+        price: Number(i.product.price),
+        total: i.product.price * i.quantity
+      })),
+      subtotal,
+      vatAmount: taxAmount,
+      discount: discountAmount,
+      total,
+      paymentMethod: method,
+      customerName: selectedCustomer !== 'Walk-in Customer' ? selectedCustomer : undefined
+    };
+
+    setCurrentReceiptData(receiptData);
+    setShowReceipt(true);
+
     if (method === 'Cash') kickDrawer(true);
 
-    if (method === 'Credit') {
+    if (method === 'Credit' || method === 'Khat/Daftar') {
       toast.success(`Credit sale of OMR ${total.toFixed(3)} recorded for ${selectedCustomer}`, {
         description: `Added to Khat ledger • ${invoiceNo}`,
       });
@@ -544,8 +637,12 @@ const POS = () => {
       });
     }
 
-    setShowQR(true);
-    setTimeout(() => { clearCart(); setShowQR(false); }, 4000);
+    setTimeout(() => {
+      clearCart();
+      setShowReceipt(false);
+      setSelectedCustomerPhone('');
+      setLastInvoice(''); // Clear invoice
+    }, 6000);
   };
 
   // Khat customers — those with debt
@@ -627,9 +724,9 @@ const POS = () => {
                   onTouchStart={handleLogoTouchStart}
                   onTouchEnd={handleLogoTouchEnd}
                   className="w-9 h-9 rounded-lg overflow-hidden flex-shrink-0 relative select-none"
-                  title="BHAEES POS"
+                  title="B-HUB POS"
                 >
-                  <img src={logoIcon} alt="BHAEES" className="w-full h-full object-cover" />
+                  <img src={logoIcon} alt="B-HUB" className="w-full h-full object-cover" />
                   {isOwner && (
                     <div className="absolute -top-0.5 -right-0.5">
                       <Crown className="w-3 h-3 text-gold" />
@@ -749,7 +846,7 @@ const POS = () => {
                         <span className="text-[10px] text-muted-foreground">{c.phone || '—'}</span>
                         {c.phone && (
                           <a
-                            href={`https://wa.me/${c.phone.replace('+', '')}?text=${encodeURIComponent(`Hi ${c.name}, this is a friendly reminder from BHAEES POS. Your outstanding balance is OMR ${Number(c.total_debt).toFixed(3)}. Thank you!`)}`}
+                            href={`https://wa.me/${c.phone.replace('+', '')}?text=${encodeURIComponent(`Hi ${c.name}, this is a friendly reminder from B-HUB POS. Your outstanding balance is OMR ${Number(c.total_debt).toFixed(3)}. Thank you!`)}`}
                             target="_blank" rel="noopener noreferrer"
                             className="text-[10px] text-success hover:underline"
                           >
@@ -833,9 +930,9 @@ const POS = () => {
                 {showCustomerPicker && (
                   <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden mt-2">
                     <div className="glass rounded-lg p-2 space-y-1 max-h-32 overflow-y-auto pos-scrollbar">
-                      <button onClick={() => { setSelectedCustomer('Walk-in Customer'); setSelectedCustomerId(null); setShowCustomerPicker(false); }} className="w-full text-left px-2 py-1.5 rounded text-xs hover:bg-muted/50 transition-colors text-foreground">Walk-in Customer</button>
+                      <button onClick={() => { setSelectedCustomer('Walk-in Customer'); setSelectedCustomerId(null); setSelectedCustomerPhone(''); setShowCustomerPicker(false); }} className="w-full text-left px-2 py-3 rounded-lg text-xs hover:bg-muted/50 transition-colors text-foreground font-semibold">Walk-in Customer</button>
                       {dbCustomers.map(c => (
-                        <button key={c.id} onClick={() => { setSelectedCustomer(c.name); setSelectedCustomerId(c.id); setShowCustomerPicker(false); }} className="w-full text-left px-2 py-1.5 rounded text-xs hover:bg-muted/50 transition-colors text-foreground">{c.name} — {c.phone || '—'}</button>
+                        <button key={c.id} onClick={() => { setSelectedCustomer(c.name); setSelectedCustomerId(c.id); setSelectedCustomerPhone(c.phone || ''); setShowCustomerPicker(false); }} className="w-full text-left px-2 py-3 rounded-lg text-xs hover:bg-muted/50 transition-colors text-foreground font-semibold border-b border-border/10 last:border-0">{c.name} — <span className="text-primary">{c.phone || '—'}</span></button>
                       ))}
                     </div>
                   </motion.div>
@@ -959,26 +1056,9 @@ const POS = () => {
               )}
             </div>
 
-            {/* QR Code Display */}
-            <AnimatePresence>
-              {showQR && lastInvoice && (
-                <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.8 }} className="p-4 border-t border-border/50 text-center">
-                  <p className="text-xs text-muted-foreground mb-2">OTA-Compliant VAT Receipt QR</p>
-                  <div className="inline-block p-3 rounded-lg bg-foreground">
-                    <QRCodeSVG
-                      value={JSON.stringify({ seller: 'BHAEES POS', vat: 'OM1234567890', invoice: lastInvoice, total: total.toFixed(3), date: new Date().toISOString() })}
-                      size={120}
-                      bgColor="hsl(180, 100%, 95%)"
-                      fgColor="hsl(0, 0%, 2%)"
-                    />
-                  </div>
-                  <p className="text-[10px] text-primary mt-2 font-mono">{lastInvoice}</p>
-                </motion.div>
-              )}
-            </AnimatePresence>
 
             {/* Cart Summary */}
-            {cart.length > 0 && !showQR && (
+            {cart.length > 0 && !showReceipt && (
               <div className="border-t border-border/50 p-4 space-y-3">
                 <div className="flex items-center gap-2">
                   <Percent className="w-4 h-4 text-muted-foreground" />
@@ -1017,24 +1097,56 @@ const POS = () => {
                   </div>
                 </div>
 
-                {/* Payment Buttons */}
-                <div className="grid grid-cols-2 gap-2">
-                  <button onClick={() => initiateCheckout('Cash')} className="flex items-center justify-center gap-2 py-3 rounded-lg bg-success text-success-foreground hover:opacity-90 transition-opacity font-medium text-xs">
-                    <Banknote className="w-4 h-4" /> Cash
+                {/* Optimized Payment Buttons (48px hit area) */}
+                <div className="grid grid-cols-2 gap-3">
+                  <button onClick={() => initiateCheckout('Cash')} className="flex items-center justify-center gap-2 h-14 rounded-xl bg-success text-success-foreground hover:opacity-90 transition-opacity font-bold text-sm shadow-md">
+                    <Banknote className="w-5 h-5" /> Cash
                   </button>
-                  <button onClick={() => initiateCheckout('Card')} className="flex items-center justify-center gap-2 py-3 rounded-lg gradient-cyan text-primary-foreground hover:opacity-90 transition-opacity font-medium text-xs glow-cyan">
-                    <CreditCard className="w-4 h-4" /> Card
+                  <button onClick={() => initiateCheckout('Card')} className="flex items-center justify-center gap-2 h-14 rounded-xl gradient-cyan text-primary-foreground hover:opacity-90 transition-opacity font-bold text-sm glow-cyan">
+                    <CreditCard className="w-5 h-5" /> Card
                   </button>
-                  <button onClick={() => initiateCheckout('Digital')} className="flex items-center justify-center gap-2 py-3 rounded-lg bg-info text-info-foreground hover:opacity-90 transition-opacity font-medium text-xs">
-                    <Smartphone className="w-4 h-4" /> Digital
+                  <button onClick={() => initiateCheckout('Thawani')} className="flex items-center justify-center gap-2 h-14 rounded-xl bg-red-600 text-white hover:opacity-90 transition-opacity font-bold text-sm shadow-md">
+                    <Smartphone className="w-5 h-5" /> Wallets
                   </button>
-                  <button onClick={() => initiateCheckout('Credit')} className="flex items-center justify-center gap-2 py-3 rounded-lg bg-warning text-warning-foreground hover:opacity-90 transition-opacity font-medium text-xs">
-                    <BookOpen className="w-4 h-4" /> Credit
+                  <button onClick={() => initiateCheckout('Khat/Daftar')} className="flex items-center justify-center gap-2 h-14 rounded-xl bg-black text-white hover:opacity-90 transition-opacity font-bold text-sm shadow-md">
+                    <BookOpen className="w-5 h-5" /> Khat/Daftar
                   </button>
                 </div>
               </div>
             )}
           </div>
+
+          {/* Receipt Modal Overlay */}
+          <AnimatePresence>
+            {showReceipt && currentReceiptData && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 overflow-y-auto"
+              >
+                <motion.div
+                  initial={{ scale: 0.9, y: 20 }}
+                  animate={{ scale: 1, y: 0 }}
+                  exit={{ scale: 0.9, y: 20 }}
+                  className="relative"
+                >
+                  <button
+                    onClick={() => setShowReceipt(false)}
+                    className="absolute -top-12 right-0 p-2 bg-white/20 rounded-full text-white hover:bg-white/40 transition-colors"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                  <Receipt {...currentReceiptData} />
+                  <div className="mt-6 flex justify-center gap-4">
+                    <Button className="h-12 px-8 bg-success font-bold" onClick={() => window.print()}>
+                      <Printer className="mr-2 w-5 h-5" /> Print 80mm
+                    </Button>
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Owner Override Modal for Below-Cost Sales */}
           <AnimatePresence>

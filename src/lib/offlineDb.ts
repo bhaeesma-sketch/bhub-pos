@@ -1,5 +1,6 @@
-import { openDB, DBSchema, IDBPDatabase } from 'idb';
+import { openDB, type IDBPDatabase, type DBSchema } from 'idb';
 import { Product, Sale, Customer } from '@/types/bhub';
+import { cloudSync } from './bhub-cloud-sync';
 
 interface BHubDB extends DBSchema {
   products: {
@@ -162,22 +163,35 @@ class OfflineDatabase {
 export const offlineDb = new OfflineDatabase();
 
 // --- Compatibility Exports for POS.tsx ---
-export const saveOfflineTransaction = (transaction: any) => offlineDb.queueSale(transaction);
+export const saveOfflineTransaction = async (transaction: any) => {
+  // 1. Queue for general sales sync
+  await offlineDb.queueSale(transaction);
+
+  // 2. If it's a credit sale, update Khat ledger
+  if (transaction.paymentMethod === 'Credit' || transaction.paymentMethod === 'Khat/Daftar') {
+    const customer = {
+      phone: transaction.customerPhone || transaction.customerId || 'Unknown',
+      name: transaction.customer || 'Walk-in Customer'
+    };
+    await offlineDb.addCredit(customer as any, transaction.total, transaction.invoiceNo);
+  }
+};
+
 export const getOfflineTransactionCount = async () => {
   const pending = await offlineDb.getPendingSales();
   return pending.length;
 };
-export const startBackgroundSync = (intervalMs: number = 30000) => {
+export const startBackgroundSync = (intervalMs: number = 20000) => {
+  console.log('[CloudSync] Engine Initialized — Monitoring Legacy POS sales...');
   const id = setInterval(async () => {
     try {
       const pending = await offlineDb.getPendingSales();
       if (pending.length > 0) {
-        console.log(`[OfflineSync] Found ${pending.length} unsynced sales...`);
-        // We'll rely on our higher-level cloudSync or standard processing
-        // For POS.tsx compatibility, we just need the loop to exist.
+        console.log(`[CloudSync] Syncing ${pending.length} sales to Owner Dashboard...`);
+        await cloudSync.syncPendingSales();
       }
     } catch (e) {
-      console.error('[OfflineSync] Error:', e);
+      console.error('[CloudSync] Connection paused:', e);
     }
   }, intervalMs);
   return () => clearInterval(id);
