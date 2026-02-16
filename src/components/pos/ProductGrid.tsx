@@ -24,14 +24,15 @@ const DEFAULT_CAT_COLOR = { bg: 'bg-muted/20', border: 'border-border/20', icon:
 const getCatColor = (cat: string) => CATEGORY_COLORS[cat] || DEFAULT_CAT_COLOR;
 
 const COLS = 4; // columns in grid
-const ROW_HEIGHT = 220;
+const ROW_HEIGHT = 260;
 
 interface Props {
   products: DbProduct[];
   addToCart: (product: DbProduct) => void;
+  isOwner?: boolean;
 }
 
-export default function ProductGrid({ products, addToCart }: Props) {
+export default function ProductGrid({ products, addToCart, isOwner = true }: Props) {
   const parentRef = useRef<HTMLDivElement>(null);
 
   const rows = useMemo(() => {
@@ -51,17 +52,14 @@ export default function ProductGrid({ products, addToCart }: Props) {
 
   if (products.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
-        No products found — try searching by name or barcode
+      <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm font-black uppercase tracking-widest opacity-20">
+        No products found
       </div>
     );
   }
 
   return (
     <div ref={parentRef} className="flex-1 overflow-y-auto p-4 pos-scrollbar">
-      <p className="text-[10px] text-muted-foreground mb-2 text-center">
-        {products.length.toLocaleString()} products
-      </p>
       <div
         style={{ height: `${virtualizer.getTotalSize()}px`, width: '100%', position: 'relative' }}
       >
@@ -78,81 +76,62 @@ export default function ProductGrid({ products, addToCart }: Props) {
                 height: `${virtualRow.size}px`,
                 transform: `translateY(${virtualRow.start}px)`,
               }}
-              className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3"
+              className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-4 pb-4"
             >
               {rowProducts.map((product) => {
-                const catColor = getCatColor(product.category);
-                const isBelowCost = product.price < product.cost;
+                const isBelowCost = isOwner && (product.price < product.cost);
                 return (
                   <motion.button
                     key={product.id}
-                    whileTap={{ scale: 0.97 }}
+                    whileTap={{ scale: 0.95 }}
                     onClick={() => addToCart(product)}
                     className={cn(
-                      'glass-card rounded-xl p-3 text-left hover:glow-cyan transition-all group h-fit',
+                      'glass-card rounded-[1.5rem] p-4 text-left hover:border-primary/50 transition-all group h-[240px] flex flex-col',
                       isBelowCost && 'ring-1 ring-destructive/40'
                     )}
                   >
                     <div
                       className={cn(
-                        'w-full aspect-[4/3] rounded-lg flex flex-col items-center justify-center mb-2 relative border overflow-hidden',
-                        catColor.bg,
-                        catColor.border
+                        'w-full aspect-square rounded-xl flex flex-col items-center justify-center mb-4 relative border border-white/5 overflow-hidden bg-white/5 shadow-inner'
                       )}
                     >
                       {product.image_url ? (
                         <img
                           src={product.image_url}
                           alt={product.name}
-                          className="w-full h-full object-cover absolute inset-0"
+                          className="w-full h-full object-cover absolute inset-0 group-hover:scale-110 transition-transform duration-500"
                           loading="lazy"
                         />
                       ) : (
-                        <>
-                          <Package
-                            className={cn('w-6 h-6 transition-colors', catColor.icon, 'group-hover:text-primary')}
-                          />
-                          <span className={cn('text-[8px] font-medium mt-1 uppercase tracking-wider', catColor.icon)}>
-                            {product.category}
-                          </span>
-                        </>
+                        <Package className="w-10 h-10 text-white/10 group-hover:text-primary transition-colors" />
                       )}
-                      {product.is_weighted && (
-                        <span className="absolute bottom-1 right-1 text-[8px] px-1.5 py-0.5 rounded bg-info/20 text-info font-bold flex items-center gap-0.5">
-                          <Scale className="w-2.5 h-2.5" /> KG
-                        </span>
-                      )}
+
                       {product.stock <= product.min_stock && (
-                        <span className="absolute top-1 right-1 text-[8px] px-1.5 py-0.5 rounded bg-destructive text-destructive-foreground font-bold">
+                        <span className="absolute top-2 right-2 text-[8px] px-2 py-1 rounded-full bg-destructive text-white font-black shadow-lg">
                           LOW
                         </span>
                       )}
-                      {isBelowCost && (
-                        <span className="absolute top-1 left-1 text-[8px] px-1.5 py-0.5 rounded bg-destructive/80 text-destructive-foreground font-bold flex items-center gap-0.5">
-                          <AlertTriangle className="w-2.5 h-2.5" /> &lt;COST
-                        </span>
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-black text-white uppercase line-clamp-2 leading-none mb-1">
+                        {product.name}
+                      </p>
+                      {product.name_ar && (
+                        <p className="text-[10px] font-bold text-muted-foreground/50 line-clamp-1 mb-2" dir="rtl">
+                          {product.name_ar}
+                        </p>
                       )}
                     </div>
-                    <p className="text-xs font-medium text-foreground line-clamp-2 leading-tight">
-                      {product.name}
-                    </p>
-                    {product.name_ar && (
-                      <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-1" dir="rtl">
-                        {product.name_ar}
-                      </p>
-                    )}
-                    <div className="flex items-center justify-between mt-2">
-                      <span className={cn('text-sm font-bold', isBelowCost ? 'text-destructive' : 'text-gold')}>
-                        OMR {product.price.toFixed(3)}
-                      </span>
-                      <span
-                        className={cn(
-                          'text-[10px] px-1.5 py-0.5 rounded',
-                          product.stock <= product.min_stock ? 'bg-destructive/20 text-destructive' : 'bg-success/20 text-success'
-                        )}
-                      >
-                        {product.stock}
-                      </span>
+
+                    <div className="flex items-end justify-between mt-auto">
+                      <div className="flex flex-col">
+                        <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest opacity-50 leading-none">Price</span>
+                        <span className="text-lg font-black text-gold leading-none mt-1">
+                          {product.price.toFixed(3)}
+                        </span>
+                      </div>
+                      <span className="text-[10px] font-black text-white/20 uppercase tracking-widest">{product.stock} IN</span>
                     </div>
                   </motion.button>
                 );

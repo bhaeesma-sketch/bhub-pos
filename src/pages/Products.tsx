@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useRef } from 'react';
-import { Search, Plus, Edit, Trash2, Package, Download, Upload, Loader2, Sparkles, AlertTriangle } from 'lucide-react';
+import { Search, Plus, Edit, Trash2, Package, Download, Upload, Loader2, Sparkles, AlertTriangle, Zap } from 'lucide-react';
 import { BulkImportModal } from '@/components/bhub/BulkImportModal';
 import { useProducts, useCategories } from '@/hooks/useSupabaseData';
 import { cn } from '@/lib/utils';
@@ -48,12 +48,16 @@ const Products = () => {
   const handleAddProduct = async () => {
     if (!form.name.trim()) { toast.error('Product name is required'); return; }
     if (!form.price || Number(form.price) <= 0) { toast.error('Valid price is required'); return; }
+
     setSaving(true);
     try {
-      const { error } = await supabase.from('products').insert({
+      const barcode = form.barcode.trim();
+
+      // UPSERT LOGIC: Use onConflict to handle existing barcodes
+      const { error } = await supabase.from('products').upsert({
         name: form.name.trim(),
         name_ar: form.name_ar.trim() || null,
-        barcode: form.barcode.trim() || null,
+        barcode: barcode || null,
         sku: form.sku.trim() || null,
         category: form.category,
         cost: Number(form.cost) || 0,
@@ -64,14 +68,22 @@ const Products = () => {
         supplier: form.supplier.trim() || null,
         is_weighted: form.is_weighted,
         expiry_date: form.expiry_date || null,
+      }, {
+        onConflict: 'barcode',
+        ignoreDuplicates: false
       });
+
       if (error) throw error;
-      toast.success('Product added!');
+
+      toast.success(barcode ? 'Product synced successfully (Upserted)' : 'Product added!');
       queryClient.invalidateQueries({ queryKey: ['products'] });
       setAddOpen(false);
       resetForm();
     } catch (err: any) {
-      toast.error('Failed: ' + err.message);
+      console.error('Save failed:', err);
+      toast.error('Error: Could not save product. Check your connection.', {
+        description: err.message
+      });
     } finally {
       setSaving(false);
     }
@@ -125,9 +137,26 @@ const Products = () => {
       setEditingProduct(null);
       resetForm();
     } catch (err: any) {
-      toast.error('Failed: ' + err.message);
+      console.error('Update failed:', err);
+      toast.error('Error: Could not update product. Check your connection.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleQuickAudit = async (productId: string, newStock: number, newPrice: number) => {
+    try {
+      const { error } = await supabase
+        .from('products')
+        .update({ stock: newStock, price: newPrice, updated_at: new Date().toISOString() })
+        .eq('id', productId);
+
+      if (error) throw error;
+      toast.success('Audit complete: Stock & Price corrected.');
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+    } catch (err: any) {
+      console.error('Audit failed:', err);
+      toast.error('Cloud Update Failed: ' + err.message);
     }
   };
 
@@ -196,6 +225,8 @@ const Products = () => {
     });
   }, [productsList, now]);
 
+  const [auditMode, setAuditMode] = useState(false);
+
   if (isLoading) {
     return <div className="flex items-center justify-center h-64"><p className="text-sm text-muted-foreground">Loading inventory...</p></div>;
   }
@@ -216,6 +247,16 @@ const Products = () => {
               </p>
             </div>
             <div className="flex items-center gap-2">
+              <button
+                onClick={() => setAuditMode(!auditMode)}
+                className={cn(
+                  "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-black uppercase tracking-widest transition-all",
+                  auditMode ? "bg-warning text-warning-foreground glow-warning" : "glass text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <AlertTriangle className="w-4 h-4" />
+                {auditMode ? 'Audit Mode: ON' : 'Audit Tool'}
+              </button>
               <button
                 onClick={generateProductImages}
                 disabled={generatingImages}
@@ -441,13 +482,46 @@ const Products = () => {
                         <td className="p-4 text-muted-foreground font-mono text-xs">{product.barcode || '—'}</td>
                         <td className="p-4"><Badge variant="outline" className="text-xs border-border/50">{product.category || 'General'}</Badge></td>
                         <td className="p-4 text-right text-muted-foreground">OMR {(product.cost || 0).toFixed(3)}</td>
-                        <td className="p-4 text-right font-medium text-primary">OMR {(product.price || 0).toFixed(3)}</td>
+                        <td className="p-4 text-right font-medium text-primary">
+                          {auditMode ? (
+                            <input
+                              type="number"
+                              step="0.001"
+                              className="w-24 px-2 py-1 rounded bg-background border border-primary/30 text-right font-bold"
+                              defaultValue={product.price}
+                              onBlur={(e) => handleQuickAudit(product.id, product.stock, Number(e.target.value))}
+                            />
+                          ) : (
+                            `OMR ${(product.price || 0).toFixed(3)}`
+                          )}
+                        </td>
                         <td className="p-4 text-right">
-                          <span className={cn('px-2 py-1 rounded-full text-xs font-medium',
-                            (product.stock || 0) <= (product.min_stock || 0) ? 'bg-destructive/20 text-destructive' : 'bg-success/20 text-success'
-                          )}>
-                            {product.stock || 0} {product.unit || 'pcs'}
-                          </span>
+                          {auditMode ? (
+                            <input
+                              type="number"
+                              className="w-20 px-2 py-1 rounded bg-background border border-warning/30 text-right font-bold"
+                              defaultValue={product.stock}
+                              onBlur={(e) => handleQuickAudit(product.id, Number(e.target.value), product.price)}
+                            />
+                          ) : (
+                            <div className="flex items-center justify-end gap-2">
+                              <span className={cn('px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider',
+                                (product.stock || 0) < 0 ? 'bg-destructive animate-pulse text-white shadow-[0_0_15px_rgba(239,68,68,0.5)]' :
+                                  (product.stock || 0) <= (product.min_stock || 0) ? 'bg-warning/20 text-warning' : 'bg-success/10 text-success'
+                              )}>
+                                {product.stock || 0} {product.unit || 'pcs'}
+                              </span>
+                              {(product.stock || 0) < 0 && (
+                                <button
+                                  onClick={() => handleQuickAudit(product.id, 50, product.price)}
+                                  className="p-1.5 rounded-lg bg-primary/20 text-primary hover:bg-primary hover:text-white transition-all shadow-sm group"
+                                  title="Quick Fix: Set to 50"
+                                >
+                                  <Zap className="w-3.5 h-3.5 group-active:scale-125" />
+                                </button>
+                              )}
+                            </div>
+                          )}
                         </td>
                         <td className="p-4">
                           <div className="flex items-center justify-center gap-2">

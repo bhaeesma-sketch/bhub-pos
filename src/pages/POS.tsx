@@ -18,6 +18,8 @@ import HeldSalesPanel, { type HeldSale } from '@/components/pos/HeldSales';
 import { supabase } from '@/integrations/supabase/client';
 import vaultVideo from '@/assets/vault-opening.mp4';
 import logoIcon from '@/assets/logo-icon.png';
+import { generateFawtaraQR } from '@/lib/fawtara';
+import { printReceiptBluetooth } from '@/lib/escpos';
 
 type DbProduct = Tables<'products'>;
 type DbCustomer = Tables<'customers'>;
@@ -114,6 +116,7 @@ const POS = () => {
 
   // Mobile Cart Toggle
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Long-press logo handler for admin quick-toggle
   const handleLogoTouchStart = useCallback(() => {
@@ -197,7 +200,11 @@ const POS = () => {
     return () => clearInterval(id);
   }, []);
 
-  useEffect(() => { searchRef.current?.focus(); }, []);
+  // Autofocus scan input on mount and after cart changes
+  useEffect(() => {
+    const focusTimer = setTimeout(() => searchRef.current?.focus(), 100);
+    return () => clearTimeout(focusTimer);
+  }, [cart.length]);
 
   // Fuse.js index for bilingual fuzzy search across 40K+ products
   const fuse = useMemo(() => new Fuse(dbProducts, {
@@ -270,9 +277,16 @@ const POS = () => {
     toast.success(`⚖️ ${product.name}: ${weight.toFixed(3)} kg = OMR ${totalPrice.toFixed(3)}`, { duration: 2000 });
   }, []);
 
+  // Global Scanner Buffer
+  const scannerBuffer = useRef<string>('');
+  const lastKeyTime = useRef<number>(0);
+
   // Process barcode: prefix-20 weigh barcodes + regular + name fallback
   const processBarcodeInput = useCallback((barcode: string): boolean => {
-    const weighed = parseWeighBarcode(barcode);
+    const cleanBarcode = barcode.trim();
+    if (!cleanBarcode) return false;
+
+    const weighed = parseWeighBarcode(cleanBarcode);
     if (weighed) {
       const match = dbProducts.find(p =>
         p.barcode && (p.barcode === weighed.productCode || p.barcode.endsWith(weighed.productCode))
@@ -281,48 +295,72 @@ const POS = () => {
         addWeighedItem(match, weighed.totalPrice);
         return true;
       }
-      toast.error(`Weighed barcode: product code "${weighed.productCode}" not found. Price: OMR ${weighed.totalPrice.toFixed(3)}`);
+      toast.error(`Weighed barcode: product code "${weighed.productCode}" not found.`);
       return true;
     }
-    // Exact barcode match
-    const exactMatch = dbProducts.find(p => p.barcode === barcode);
+
+    // Exact barcode match (Primary goal)
+    const exactMatch = dbProducts.find(p => p.barcode === cleanBarcode);
     if (exactMatch) {
       addToCart(exactMatch);
       toast.success(`✓ Scanned: ${exactMatch.name}`, { duration: 1500 });
       return true;
     }
-    // Fallback: try exact name match (case-insensitive)
-    const nameMatch = dbProducts.find(p => p.name.toLowerCase() === barcode.toLowerCase());
+
+    // Fallback: try exact name match
+    const nameMatch = dbProducts.find(p => p.name.toLowerCase() === cleanBarcode.toLowerCase());
     if (nameMatch) {
       addToCart(nameMatch);
-      toast.success(`✓ Found by name: ${nameMatch.name}`, { duration: 1500 });
       return true;
     }
-    // Fallback: partial name match — only if both strings are meaningful length (>=4 chars)
-    const barcodeLC = barcode.toLowerCase();
-    if (barcodeLC.length >= 4) {
-      const partialMatch = dbProducts.find(p => {
-        const nameLC = p.name.toLowerCase();
-        if (nameLC.length < 4) return false; // skip junk entries like "1", "fa", etc.
-        return nameLC.includes(barcodeLC) || barcodeLC.includes(nameLC);
-      });
-      if (partialMatch) {
-        addToCart(partialMatch);
-        toast.success(`✓ Partial match: ${partialMatch.name}`, { duration: 1500 });
-        return true;
-      }
-    }
-    // Fallback: fuzzy search — add the top match if it's strong enough
-    const fuseHits = fuse.search(barcode, { limit: 5 });
-    if (fuseHits.length > 0 && (fuseHits[0].score ?? 1) < 0.35) {
-      addToCart(fuseHits[0].item);
-      toast.success(`✓ Best match: ${fuseHits[0].item.name}`, { duration: 1500 });
-      return true;
-    }
-    return false;
-  }, [dbProducts, addToCart, addWeighedItem, fuse]);
 
-  // Barcode scanner: Enter key
+    // If nothing found, return false to trigger Quick Add Popup
+    return false;
+  }, [dbProducts, addToCart, addWeighedItem]);
+
+  // Global Scanner Listener
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      // Ignore if common modifiers are held
+      if (e.ctrlKey || e.altKey || e.metaKey) return;
+
+      // Handle Enter (Scanner termination)
+      if (e.key === 'Enter') {
+        const barcode = scannerBuffer.current.trim();
+        if (barcode.length > 2) {
+          e.preventDefault();
+          if (!processBarcodeInput(barcode)) {
+            setQuickAddBarcode(barcode);
+            setQuickAddName('');
+            setQuickAddOpen(true);
+          }
+          scannerBuffer.current = '';
+        }
+        return;
+      }
+
+      // Buffer capturing
+      if (e.key.length === 1) {
+        const now = Date.now();
+        // If it's been too long between keys, it might be human typing in a random place
+        // But the user specifically wants "Zero Failure", so we buffer everything if not in an input
+        const isInput = (e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).tagName === 'TEXTAREA';
+
+        if (!isInput) {
+          scannerBuffer.current += e.key;
+        } else if (isInput && (e.target === searchRef.current)) {
+          // If it's the search box, let the local handler deal with it, but we can also sync the buffer
+          // Actually, it's safer to let the local handler run for the search box.
+        }
+        lastKeyTime.current = now;
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [processBarcodeInput]);
+
+  // Barcode scanner: Enter key in Search Box
   const handleSearchKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault();
@@ -334,34 +372,24 @@ const POS = () => {
         return;
       }
 
-      if (filteredProducts.length === 1) {
-        addToCart(filteredProducts[0]);
-        setSearchQuery('');
-        toast.success(`✓ Added: ${filteredProducts[0].name}`, { duration: 1500 });
-        return;
-      }
-
-      if (filteredProducts.length === 0) {
-        // Open Quick Add dialog with the search term as name hint
-        setQuickAddBarcode('');
-        setQuickAddName(query);
-        setQuickAddOpen(true);
-        setSearchQuery('');
-      }
+      // Not found logic
+      setQuickAddBarcode(query);
+      setQuickAddName('');
+      setQuickAddOpen(true);
+      setSearchQuery('');
     }
-  }, [searchQuery, filteredProducts, addToCart, processBarcodeInput]);
+  }, [searchQuery, processBarcodeInput]);
 
-  // Camera scan handler — supports prefix-20 weigh barcodes + regular
+  // Camera scan handler
   const handleCameraScan = useCallback((barcode: string) => {
     if (processBarcodeInput(barcode)) return;
 
-    // Not found — open Quick Add Product dialog with prefilled barcode
-    setQuickAddBarcode(barcode);
+    setQuickAddBarcode(barcode.trim());
     setQuickAddName('');
     setQuickAddOpen(true);
   }, [processBarcodeInput]);
 
-  // Quick add product callback — auto-add to cart
+  // Quick add product callback
   const handleQuickProductAdded = useCallback((product: DbProduct) => {
     addToCart(product);
   }, [addToCart]);
@@ -498,8 +526,10 @@ const POS = () => {
     return sum + (itemTotal - itemDiscountAmt);
   }, 0);
   const discountAmount = (subtotal * cartDiscount) / 100;
-  const taxAmount = (subtotal - discountAmount) * 0.05;
-  const total = subtotal - discountAmount + taxAmount;
+  // VAT is now INCLUDED in the price. 
+  // Formula for extraction from Gross: VAT = Gross * (Rate / (100 + Rate))
+  const total = subtotal - discountAmount;
+  const taxAmount = total * (5 / 105);
 
   // Hardware placeholders
   const kickDrawer = (isSaleRelated = false) => {
@@ -574,75 +604,133 @@ const POS = () => {
     }
   };
 
+  // Execute Checkout with Error Handling & Khat Integration
   const executeCheckout = async (method: string) => {
     const invoiceNo = `INV-${Date.now().toString(36).toUpperCase()}`;
-    setLastInvoice(invoiceNo);
+    const now = new Date();
 
-    // Save to IndexedDB (offline-first) — will sync to Supabase
-    await saveOfflineTransaction({
-      id: invoiceNo,
-      cart: cart.map(i => ({
-        productId: i.product.id,
-        productName: i.product.name,
-        quantity: i.quantity,
-        unitPrice: i.product.price,
-        cost: i.product.cost,
-        total: i.product.price * i.quantity,
-        barcode: i.product.barcode || undefined,
-      })),
-      customer: selectedCustomer,
-      customerId: selectedCustomerId || undefined,
-      subtotal,
-      discount: discountAmount,
-      tax: taxAmount,
-      total,
-      paymentMethod: method,
-      invoiceNo,
-      createdAt: new Date().toISOString(),
-      synced: false,
-    });
+    try {
+      setIsSaving(true);
 
-    const receiptData = {
-      storeName: 'B-HUB POS',
-      vatin: 'OM1234567890',
-      invoiceNo,
-      date: new Date().toISOString(),
-      items: cart.map(i => ({
-        name: i.product.name,
-        nameAr: i.product.name_ar || i.product.name,
-        quantity: i.quantity,
-        price: Number(i.product.price),
-        total: i.product.price * i.quantity
-      })),
-      subtotal,
-      vatAmount: taxAmount,
-      discount: discountAmount,
-      total,
-      paymentMethod: method,
-      customerName: selectedCustomer !== 'Walk-in Customer' ? selectedCustomer : undefined
-    };
+      // 1. Save to Offline DB (IndexedDB)
+      const transactionData = {
+        id: invoiceNo,
+        cart: cart.map(i => ({
+          productId: i.product.id,
+          productName: i.product.name,
+          quantity: i.quantity,
+          unitPrice: i.product.price,
+          cost: i.product.cost,
+          total: i.product.price * i.quantity,
+          barcode: i.product.barcode || undefined,
+        })),
+        customer: selectedCustomer,
+        customerId: selectedCustomerId || undefined,
+        subtotal,
+        discount: discountAmount,
+        tax: taxAmount,
+        total,
+        paymentMethod: method,
+        invoiceNo,
+        createdAt: now.toISOString(),
+        synced: false,
+      };
 
-    setCurrentReceiptData(receiptData);
-    setShowReceipt(true);
+      await saveOfflineTransaction(transactionData);
 
-    if (method === 'Cash') kickDrawer(true);
+      // 2. Khat (Debt) Integration
+      if ((method === 'Khat/Daftar' || method === 'Credit') && selectedCustomerId) {
+        const { error: khatError } = await (supabase as any).rpc('increment_customer_debt', {
+          cust_id: selectedCustomerId,
+          amount: total
+        });
 
-    if (method === 'Credit' || method === 'Khat/Daftar') {
-      toast.success(`Credit sale of OMR ${total.toFixed(3)} recorded for ${selectedCustomer}`, {
-        description: `Added to Khat ledger • ${invoiceNo}`,
+        if (khatError) throw khatError;
+
+        // Also log to credit ledger
+        await supabase.from('credit_ledger').insert({
+          customer_id: selectedCustomerId,
+          amount: total,
+          type: 'credit',
+          note: `Auto-added from Invoice ${invoiceNo}`
+        });
+      }
+
+      // 3. Fawtara QR Logic
+      const storeName = localStorage.getItem('bhub_store_name') || 'B-HUB POS';
+      const vatNumber = localStorage.getItem('bhub_vat_number') || '1234567890';
+
+      const qrTlv = generateFawtaraQR({
+        sellerName: storeName,
+        vatNumber: vatNumber,
+        timestamp: now.toISOString(),
+        totalWithVat: total.toFixed(3),
+        vatAmount: taxAmount.toFixed(3)
       });
-    } else {
-      toast.success(`Payment of OMR ${total.toFixed(3)} received via ${method}`, {
-        description: `Invoice ${invoiceNo} for ${selectedCustomer}`,
+
+      const receiptData = {
+        storeName,
+        vatin: vatNumber,
+        invoiceNo,
+        date: now.toISOString(),
+        items: cart.map(i => ({
+          name: i.product.name,
+          nameAr: i.product.name_ar || i.product.name,
+          quantity: i.quantity,
+          price: Number(i.product.price),
+          total: i.product.price * i.quantity
+        })),
+        subtotal,
+        vatAmount: taxAmount,
+        discount: discountAmount,
+        total,
+        paymentMethod: method,
+        customerName: selectedCustomer !== 'Walk-in Customer' ? selectedCustomer : undefined,
+        qrCode: qrTlv
+      };
+
+      setCurrentReceiptData(receiptData);
+      setShowReceipt(true);
+      if (method === 'Cash') kickDrawer(true);
+
+      toast.success(`Sale Complete: OMR ${total.toFixed(3)}`, {
+        description: `${method} payment processed successfully.`,
+        duration: 3000
       });
+
+      // 5. PRINT RECEIPT (HARDWARE)
+      try {
+        const storeName = localStorage.getItem('bhub_store_name') || 'B-HUB POS';
+        const dateStr = now.toLocaleString();
+
+        await printReceiptBluetooth({
+          storeName,
+          invoiceNo,
+          date: dateStr,
+          items: cart,
+          totals: { subtotal, tax: taxAmount, total },
+          qrCode: invoiceNo // This would be the fawtara QR in a full impl
+        });
+      } catch (printErr) {
+        console.warn('Printer connection failed:', printErr);
+        toast.error('Printer Offline: Connection failed');
+      }
+
+      // Clear after visual confirmation (or immediately depends on preference, but here we keep receipt modal for a bit)
+      setTimeout(() => {
+        clearCart();
+        setShowReceipt(false);
+        setLastInvoice('');
+      }, 5000);
+
+    } catch (err: any) {
+      console.error('Checkout failed:', err);
+      toast.error('Error: Could not save transaction. Check your connection.', {
+        description: err.message
+      });
+    } finally {
+      setIsSaving(false);
     }
-
-    setTimeout(() => {
-      clearCart();
-      setShowReceipt(false);
-      setSelectedCustomerPhone('');
-      setLastInvoice(''); // Clear invoice
-    }, 6000);
   };
 
   // Khat customers — those with debt
@@ -805,551 +893,430 @@ const POS = () => {
               </div>
             </div>
 
-            {/* Products Grid — Virtual Scrolling */}
-            <ProductGrid products={filteredProducts} addToCart={addToCart} />
-          </div>
-
-          {/* Digital Khat Sidebar */}
-          <AnimatePresence>
-            {showKhat && (
-              <motion.div
-                initial={{ width: 0, opacity: 0 }}
-                animate={{ width: 300, opacity: 1 }}
-                exit={{ width: 0, opacity: 0 }}
-                className="border-l border-border/50 glass-strong flex flex-col overflow-hidden"
-              >
-                <div className="p-4 border-b border-border/50">
-                  <h3 className="text-sm font-bold font-heading text-foreground flex items-center gap-2">
-                    <BookOpen className="w-4 h-4 text-primary" />
-                    Digital Khat (Daftar)
-                  </h3>
-                </div>
-                <div className="flex-1 overflow-y-auto p-3 space-y-2 pos-scrollbar">
-                  {khatCustomers.map(c => (
-                    <div key={c.id} className="glass rounded-lg p-3 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-medium text-foreground capitalize">{c.name}</span>
-                        <span className={cn(
-                          'text-xs font-bold',
-                          c.total_debt > 50 ? 'text-destructive' : c.total_debt > 5 ? 'text-warning' : 'text-success'
-                        )}>
-                          <span className="text-gold">OMR</span> {Number(c.total_debt).toFixed(2)}
-                        </span>
-                      </div>
-                      <div className="w-full h-1.5 rounded-full bg-muted overflow-hidden">
-                        <div className={cn(
-                          'h-full rounded-full transition-all',
-                          c.total_debt > 50 ? 'debt-gauge-red' : c.total_debt > 5 ? 'debt-gauge-yellow' : 'debt-gauge-green'
-                        )} style={{ width: `${Math.min((Number(c.total_debt) / 400) * 100, 100)}%` }} />
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] text-muted-foreground">{c.phone || '—'}</span>
-                        {c.phone && (
-                          <a
-                            href={`https://wa.me/${c.phone.replace('+', '')}?text=${encodeURIComponent(`Hi ${c.name}, this is a friendly reminder from B-HUB POS. Your outstanding balance is OMR ${Number(c.total_debt).toFixed(3)}. Thank you!`)}`}
-                            target="_blank" rel="noopener noreferrer"
-                            className="text-[10px] text-success hover:underline"
-                          >
-                            WhatsApp ↗
-                          </a>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                  {khatCustomers.length === 0 && (
-                    <div className="text-center text-xs text-muted-foreground py-8">No outstanding debts</div>
-                  )}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Right: Cart */}
-          <div className={cn("w-full md:w-[380px] border-l border-border/50 glass-strong flex flex-col transition-all duration-300", mobileCartOpen ? "fixed inset-0 z-50 bg-background/95 backdrop-blur-xl md:static md:bg-transparent md:z-auto" : "hidden md:flex")}>
-            {/* Cart Header */}
-            <div className="p-4 border-b border-border/50">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
+            {/* Quick Tiles for top 10 items */}
+            <div className="px-4 py-3 border-b border-border/50 bg-muted/5">
+              <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+                <span className="text-[10px] font-black uppercase tracking-tighter text-muted-foreground vertical-text rotate-180 mr-1">Quick</span>
+                {QUICK_ITEMS.map(item => (
                   <button
-                    onClick={() => setMobileCartOpen(false)}
-                    className="md:hidden p-1.5 -ml-2 text-muted-foreground hover:text-foreground rounded-full hover:bg-muted/20"
-                  >
-                    <ArrowLeft className="w-5 h-5" />
-                  </button>
-                  <h2 className="text-base font-bold font-heading text-foreground">Current Sale</h2>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  {/* Hold Sale */}
-                  <button
-                    onClick={holdCurrentSale}
-                    disabled={cart.length === 0}
-                    className="p-1.5 rounded-lg text-muted-foreground hover:text-warning hover:bg-warning/10 transition-colors disabled:opacity-30"
-                    title="Hold/Park Sale"
-                  >
-                    <PauseCircle className="w-4 h-4" />
-                  </button>
-                  {/* Recall Held Sales */}
-                  <button
-                    onClick={() => setShowHeldSales(!showHeldSales)}
-                    className={cn('p-1.5 rounded-lg transition-colors relative', showHeldSales ? 'bg-success/20 text-success' : 'text-muted-foreground hover:text-success hover:bg-success/10')}
-                    title={`Recall Held Sale (${heldSales.length})`}
-                  >
-                    <Play className="w-4 h-4" />
-                    {heldSales.length > 0 && (
-                      <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-warning text-warning-foreground text-[9px] font-bold flex items-center justify-center">
-                        {heldSales.length}
-                      </span>
+                    key={item.id}
+                    onClick={() => addQuickItem(item)}
+                    className={cn(
+                      "flex flex-col items-center justify-center min-w-[80px] h-16 rounded-xl border-2 transition-all active:scale-90",
+                      item.color
                     )}
-                  </button>
-                  <button onClick={() => kickDrawer(false)} className="p-1.5 rounded-lg text-muted-foreground hover:text-success hover:bg-success/10 transition-colors" title="Open Cash Drawer (ESC/POS)">
-                    <DoorOpen className="w-4 h-4" />
-                  </button>
-                  <button onClick={printReceipt} className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors" title="Print Receipt (Epson TM-T88VII)">
-                    <Printer className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => setShowKhat(!showKhat)}
-                    className={cn('p-1.5 rounded-lg transition-colors', showKhat ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:text-foreground')}
-                    title="Digital Khat"
                   >
-                    <BookOpen className="w-4 h-4" />
+                    <span className="text-xl">{item.icon}</span>
+                    <span className="text-[10px] font-bold truncate px-1 w-full">{item.name}</span>
                   </button>
-                  {cart.length > 0 && (
-                    <button onClick={clearCart} className="text-xs text-destructive hover:underline">Clear</button>
-                  )}
-                </div>
+                ))}
+                {/* Dynamically add some real top items if available */}
+                {dbProducts.slice(0, 7).filter(p => p.price > 0 && !QUICK_ITEMS.some(q => q.name === p.name)).map(p => (
+                  <button
+                    key={p.id}
+                    onClick={() => addToCart(p)}
+                    className="flex flex-col items-center justify-center min-w-[80px] h-16 rounded-xl border-2 border-border/50 bg-background text-foreground transition-all active:scale-90 hover:border-primary/50"
+                  >
+                    <span className="text-[10px] font-black">{p.price.toFixed(3)}</span>
+                    <span className="text-[9px] font-bold truncate px-1 w-full">{p.name}</span>
+                  </button>
+                ))}
               </div>
-              <button
-                onClick={() => setShowCustomerPicker(!showCustomerPicker)}
-                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg glass border border-input text-sm text-foreground hover:bg-muted/30 transition-colors"
-              >
-                <User className="w-4 h-4 text-muted-foreground" />
-                <span>{selectedCustomer}</span>
-              </button>
-              <AnimatePresence>
-                {showCustomerPicker && (
-                  <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden mt-2">
-                    <div className="glass rounded-lg p-2 space-y-1 max-h-32 overflow-y-auto pos-scrollbar">
-                      <button onClick={() => { setSelectedCustomer('Walk-in Customer'); setSelectedCustomerId(null); setSelectedCustomerPhone(''); setShowCustomerPicker(false); }} className="w-full text-left px-2 py-3 rounded-lg text-xs hover:bg-muted/50 transition-colors text-foreground font-semibold">Walk-in Customer</button>
-                      {dbCustomers.map(c => (
-                        <button key={c.id} onClick={() => { setSelectedCustomer(c.name); setSelectedCustomerId(c.id); setSelectedCustomerPhone(c.phone || ''); setShowCustomerPicker(false); }} className="w-full text-left px-2 py-3 rounded-lg text-xs hover:bg-muted/50 transition-colors text-foreground font-semibold border-b border-border/10 last:border-0">{c.name} — <span className="text-primary">{c.phone || '—'}</span></button>
-                      ))}
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
             </div>
 
-            {/* Held Sales Panel */}
+            {/* Left: Product Grid (75%) */}
+            <div className="flex-1 flex flex-col min-w-0 bg-[#0F172A]">
+              <ProductGrid
+                products={filteredProducts}
+                addToCart={addToCart}
+                isOwner={staffSession?.role === 'owner'}
+              />
+            </div>
+
+            {/* Digital Khat Sidebar */}
             <AnimatePresence>
-              {showHeldSales && (
-                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="border-b border-border/50 overflow-hidden">
-                  <HeldSalesPanel
-                    heldSales={heldSales}
-                    onRecall={recallHeldSale}
-                    onDelete={deleteHeldSale}
-                    onClose={() => setShowHeldSales(false)}
-                  />
+              {showKhat && (
+                <motion.div
+                  initial={{ width: 0, opacity: 0 }}
+                  animate={{ width: 300, opacity: 1 }}
+                  exit={{ width: 0, opacity: 0 }}
+                  className="border-l border-border/50 glass-strong flex flex-col overflow-hidden"
+                >
+                  <div className="p-4 border-b border-border/50">
+                    <h3 className="text-sm font-bold font-heading text-foreground flex items-center gap-2">
+                      <BookOpen className="w-4 h-4 text-primary" />
+                      Digital Khat (Daftar)
+                    </h3>
+                  </div>
+                  <div className="flex-1 overflow-y-auto p-3 space-y-2 pos-scrollbar">
+                    {khatCustomers.map(c => (
+                      <div key={c.id} className="glass rounded-lg p-3 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-medium text-foreground capitalize">{c.name}</span>
+                          <span className={cn(
+                            'text-xs font-bold',
+                            c.total_debt > 50 ? 'text-destructive' : c.total_debt > 5 ? 'text-warning' : 'text-success'
+                          )}>
+                            <span className="text-gold">OMR</span> {Number(c.total_debt).toFixed(2)}
+                          </span>
+                        </div>
+                        <div className="w-full h-1.5 rounded-full bg-muted overflow-hidden">
+                          <div className={cn(
+                            'h-full rounded-full transition-all',
+                            c.total_debt > 50 ? 'debt-gauge-red' : c.total_debt > 5 ? 'debt-gauge-yellow' : 'debt-gauge-green'
+                          )} style={{ width: `${Math.min((Number(c.total_debt) / 400) * 100, 100)}%` }} />
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] text-muted-foreground">{c.phone || '—'}</span>
+                          {c.phone && (
+                            <a
+                              href={`https://wa.me/${c.phone.replace('+', '')}?text=${encodeURIComponent(`السلام عليكم / Hello!\nThis is a friendly reminder from ${localStorage.getItem('bhub_store_name') || 'B-HUB POS'}.\nYour current balance in our Khat ledger is: OMR ${Number(c.total_debt).toFixed(3)}.\nPlease visit the shop at your convenience to settle the amount.\nThank you for your business!\nB-HUB POS System`)}`}
+                              target="_blank" rel="noopener noreferrer"
+                              className="text-[10px] text-success hover:underline"
+                            >
+                              WhatsApp ↗
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                    {khatCustomers.length === 0 && (
+                      <div className="text-center text-xs text-muted-foreground py-8">No outstanding debts</div>
+                    )}
+                  </div>
                 </motion.div>
               )}
             </AnimatePresence>
 
-            {/* Cart Items */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-2 pos-scrollbar">
-              {cart.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-                  <ShoppingCart className="w-12 h-12 mb-3 opacity-20" />
-                  <p className="text-sm">Cart is empty</p>
-                  <p className="text-xs mt-1">Scan a barcode or tap a product</p>
-                  {/* Quick add product button */}
-                  <button
-                    onClick={() => { setQuickAddBarcode(''); setQuickAddName(''); setQuickAddOpen(true); }}
-                    className="mt-3 flex items-center gap-1.5 px-3 py-1.5 rounded-lg glass text-xs text-primary hover:bg-primary/10 transition-colors"
-                  >
-                    <Plus className="w-3.5 h-3.5" /> Add New Product
-                  </button>
+            {/* Right: Cart (25%) */}
+            <div className={cn("w-full md:w-[380px] border-l border-sidebar-border/50 bg-[#0F172A] flex flex-col transition-all duration-300", mobileCartOpen ? "fixed inset-0 z-50 md:static" : "hidden md:flex")}>
+              {/* Cart Header */}
+              <div className="p-4 border-b border-sidebar-border/30 bg-[#1E293B]">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-sm font-black text-foreground uppercase tracking-wider">Current Sale</h2>
+                  <div className="flex items-center gap-2">
+                    <button onClick={clearCart} className="p-1 px-2 rounded-lg text-[10px] font-black text-muted-foreground hover:text-destructive hover:bg-destructive/10 uppercase">Clear</button>
+                  </div>
                 </div>
-              ) : (
-                cart.map(item => {
-                  const itemTotal = item.product.price * item.quantity;
-                  const itemDiscountAmt = (itemTotal * item.discount) / 100;
-                  const itemFinal = itemTotal - itemDiscountAmt;
-                  return (
-                    <motion.div key={item.product.id} layout initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="p-3 rounded-lg glass space-y-1.5">
-                      <div className="flex items-center gap-3">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-medium text-foreground truncate">{item.product.name}</p>
-                          <p className="text-xs text-muted-foreground">
-                            <span className="text-gold">OMR</span> {item.product.price.toFixed(3)} × {item.quantity}
-                            {item.discount > 0 && <span className="text-success ml-1">(-{item.discount}%)</span>}
-                          </p>
+              </div>
+
+              {/* Cart Items - High Contrast White on Dark */}
+              <div className="flex-1 overflow-y-auto pos-scrollbar p-2 space-y-2">
+                {cart.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center opacity-20 invert pt-20">
+                    <ShoppingCart className="w-12 h-12 mb-4" />
+                    <p className="text-xs font-black uppercase tracking-widest">Cart is empty</p>
+                  </div>
+                ) : (
+                  cart.map((item) => {
+                    const itemFinal = (item.product.price * (1 - item.discount / 100)) * item.quantity;
+                    return (
+                      <motion.div
+                        layout
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        key={item.product.id}
+                        className="p-3 rounded-xl bg-white/5 border border-white/10 group"
+                      >
+                        <div className="flex justify-between items-start mb-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-black text-white uppercase leading-tight truncate">{item.product.name}</p>
+                            <p className="text-[10px] font-bold text-muted-foreground uppercase">{item.product.price.toFixed(3)} x {item.quantity}</p>
+                          </div>
+                          <p className="text-xs font-black text-gold">OMR {itemFinal.toFixed(3)}</p>
                         </div>
-                        <div className="flex items-center gap-1">
-                          <button onClick={() => updateQuantity(item.product.id, -1)} className="w-6 h-6 rounded glass flex items-center justify-center hover:bg-primary/10 transition-colors">
-                            <Minus className="w-3 h-3 text-foreground" />
-                          </button>
-                          {/* Tap to edit quantity */}
-                          {editingQuantity === item.product.id ? (
-                            <input
-                              type="number"
-                              className="w-10 text-center text-xs font-semibold bg-transparent border border-primary rounded px-0.5 py-0.5 text-foreground focus:outline-none"
-                              value={editQuantityValue}
-                              onChange={e => setEditQuantityValue(e.target.value)}
-                              onBlur={() => {
-                                const q = Number(editQuantityValue);
-                                if (q > 0) setExactQuantity(item.product.id, q);
-                                setEditingQuantity(null);
-                              }}
-                              onKeyDown={e => {
-                                if (e.key === 'Enter') {
-                                  const q = Number(editQuantityValue);
-                                  if (q > 0) setExactQuantity(item.product.id, q);
-                                  setEditingQuantity(null);
-                                }
-                              }}
-                              autoFocus
-                            />
-                          ) : (
-                            <button
-                              onClick={() => { setEditingQuantity(item.product.id); setEditQuantityValue(String(item.quantity)); }}
-                              className="w-7 text-center text-xs font-semibold text-foreground hover:text-primary transition-colors"
-                              title="Tap to edit quantity"
-                            >
-                              {item.quantity}
-                            </button>
-                          )}
-                          <button onClick={() => updateQuantity(item.product.id, 1)} className="w-6 h-6 rounded glass flex items-center justify-center hover:bg-primary/10 transition-colors">
-                            <Plus className="w-3 h-3 text-foreground" />
+
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1">
+                            <button onClick={() => updateQuantity(item.product.id, -1)} className="w-7 h-7 rounded-lg bg-white/10 flex items-center justify-center hover:bg-white/20 transition-all font-black">-</button>
+                            <span className="w-8 text-center text-xs font-black text-white">{item.quantity}</span>
+                            <button onClick={() => updateQuantity(item.product.id, 1)} className="w-7 h-7 rounded-lg bg-white/10 flex items-center justify-center hover:bg-white/20 transition-all font-black">+</button>
+                          </div>
+                          <button onClick={() => removeFromCart(item.product.id)} className="text-destructive/40 hover:text-destructive">
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
-                        <p className="text-xs font-bold text-gold w-16 text-right">OMR {itemFinal.toFixed(3)}</p>
-                        <button onClick={() => removeFromCart(item.product.id)} className="text-destructive/60 hover:text-destructive transition-colors">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                      {/* Item-level discount toggle */}
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => setEditingItemDiscount(editingItemDiscount === item.product.id ? null : item.product.id)}
-                          className={cn('flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded transition-colors',
-                            item.discount > 0 ? 'bg-success/20 text-success' : 'text-muted-foreground hover:text-foreground'
-                          )}
-                        >
-                          <Tag className="w-2.5 h-2.5" />
-                          {item.discount > 0 ? `${item.discount}% off` : 'Discount'}
-                        </button>
-                        {editingItemDiscount === item.product.id && (
-                          <input
-                            type="number"
-                            className="w-14 text-[10px] bg-transparent border border-input rounded px-1.5 py-0.5 text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                            placeholder="%"
-                            value={item.discount || ''}
-                            onChange={e => updateItemDiscount(item.product.id, Number(e.target.value))}
-                            min={0} max={100}
-                            autoFocus
-                          />
-                        )}
-                      </div>
-                    </motion.div>
-                  );
-                })
-              )}
-            </div>
+                      </motion.div>
+                    );
+                  })
+                )}
+              </div>
 
-
-            {/* Cart Summary */}
-            {cart.length > 0 && !showReceipt && (
-              <div className="border-t border-border/50 p-4 space-y-3">
-                <div className="flex items-center gap-2">
-                  <Percent className="w-4 h-4 text-muted-foreground" />
-                  <input
-                    type="number"
-                    placeholder="Discount %"
-                    value={cartDiscount || ''}
-                    onChange={(e) => {
-                      if (isStaffOnly) { toast.error('Staff cannot change discount'); return; }
-                      setCartDiscount(Number(e.target.value));
-                    }}
-                    disabled={isStaffOnly}
-                    className="flex-1 px-2 py-1.5 rounded glass text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                    min={0} max={100}
-                  />
-                </div>
-
-                <div className="space-y-1.5 text-xs">
-                  <div className="flex justify-between text-muted-foreground">
-                    <span>Subtotal ({cart.reduce((s, i) => s + i.quantity, 0)} items)</span>
-                    <span><span className="text-gold">OMR</span> {subtotal.toFixed(3)}</span>
+              {/* Cart Summary & MASSIVE CHARGE BUTTON */}
+              <div className="p-4 bg-[#1E293B] border-t border-sidebar-border/50 space-y-4">
+                <div className="space-y-2">
+                  <div className="flex justify-between text-xs font-bold text-muted-foreground uppercase tracking-tighter">
+                    <span>Subtotal</span>
+                    <span className="text-white">OMR {subtotal.toFixed(3)}</span>
                   </div>
                   {cartDiscount > 0 && (
-                    <div className="flex justify-between text-success">
+                    <div className="flex justify-between text-xs font-bold text-primary uppercase tracking-tighter">
                       <span>Discount ({cartDiscount}%)</span>
                       <span>-OMR {discountAmount.toFixed(3)}</span>
                     </div>
                   )}
-                  <div className="flex justify-between text-muted-foreground">
-                    <span>VAT (5%)</span>
-                    <span>OMR {taxAmount.toFixed(3)}</span>
-                  </div>
-                  <div className="flex justify-between text-base font-bold text-foreground pt-2 border-t border-border/50">
-                    <span>Total</span>
-                    <span className="text-gold text-glow">OMR {total.toFixed(3)}</span>
+                  <div className="flex justify-between text-xs font-bold text-muted-foreground uppercase tracking-tighter">
+                    <span>VAT (5% Included)</span>
+                    <span className="text-white">OMR {taxAmount.toFixed(3)}</span>
                   </div>
                 </div>
 
-                {/* Optimized Payment Buttons (48px hit area) */}
-                <div className="grid grid-cols-2 gap-3">
-                  <button onClick={() => initiateCheckout('Cash')} className="flex items-center justify-center gap-2 h-14 rounded-xl bg-success text-success-foreground hover:opacity-90 transition-opacity font-bold text-sm shadow-md">
-                    <Banknote className="w-5 h-5" /> Cash
-                  </button>
-                  <button onClick={() => initiateCheckout('Card')} className="flex items-center justify-center gap-2 h-14 rounded-xl gradient-cyan text-primary-foreground hover:opacity-90 transition-opacity font-bold text-sm glow-cyan">
-                    <CreditCard className="w-5 h-5" /> Card
-                  </button>
-                  <button onClick={() => initiateCheckout('Thawani')} className="flex items-center justify-center gap-2 h-14 rounded-xl bg-red-600 text-white hover:opacity-90 transition-opacity font-bold text-sm shadow-md">
-                    <Smartphone className="w-5 h-5" /> Wallets
-                  </button>
-                  <button onClick={() => initiateCheckout('Khat/Daftar')} className="flex items-center justify-center gap-2 h-14 rounded-xl bg-black text-white hover:opacity-90 transition-opacity font-bold text-sm shadow-md">
-                    <BookOpen className="w-5 h-5" /> Khat/Daftar
-                  </button>
+                <button
+                  onClick={() => initiateCheckout('Cash')}
+                  disabled={cart.length === 0 || isSaving}
+                  className={cn(
+                    "w-full h-20 rounded-2xl flex flex-col items-center justify-center gap-1 transition-all active:scale-95 shadow-2xl",
+                    cart.length > 0
+                      ? "bg-primary text-primary-foreground glow-cyan-strong"
+                      : "bg-muted text-muted-foreground opacity-50 cursor-not-allowed"
+                  )}
+                >
+                  <span className="text-xs font-black uppercase tracking-[0.2em]">Charge Terminal</span>
+                  <span className="text-2xl font-black">OMR {total.toFixed(3)}</span>
+                </button>
+
+                <div className="grid grid-cols-2 gap-2 mt-2">
+                  <button onClick={() => initiateCheckout('Card')} className="h-10 rounded-xl glass border-primary/20 text-[10px] font-black uppercase text-primary hover:bg-primary/10">Card</button>
+                  <button onClick={() => initiateCheckout('Khat/Daftar')} className="h-10 rounded-xl glass border-gold/20 text-[10px] font-black uppercase text-gold hover:bg-gold/10">Khat</button>
                 </div>
               </div>
-            )}
-          </div>
+            </div>
 
-          {/* Receipt Modal Overlay */}
-          <AnimatePresence>
-            {showReceipt && currentReceiptData && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 overflow-y-auto"
-              >
+            {/* Receipt Modal Overlay */}
+            <AnimatePresence>
+              {showReceipt && currentReceiptData && (
                 <motion.div
-                  initial={{ scale: 0.9, y: 20 }}
-                  animate={{ scale: 1, y: 0 }}
-                  exit={{ scale: 0.9, y: 20 }}
-                  className="relative"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 overflow-y-auto"
                 >
-                  <button
-                    onClick={() => setShowReceipt(false)}
-                    className="absolute -top-12 right-0 p-2 bg-white/20 rounded-full text-white hover:bg-white/40 transition-colors"
+                  <motion.div
+                    initial={{ scale: 0.9, y: 20 }}
+                    animate={{ scale: 1, y: 0 }}
+                    exit={{ scale: 0.9, y: 20 }}
+                    className="relative"
                   >
-                    <X className="w-6 h-6" />
-                  </button>
-                  <Receipt {...currentReceiptData} />
-                  <div className="mt-6 flex justify-center gap-4">
-                    <Button className="h-12 px-8 bg-success font-bold" onClick={() => window.print()}>
-                      <Printer className="mr-2 w-5 h-5" /> Print 80mm
-                    </Button>
-                  </div>
+                    <button
+                      onClick={() => setShowReceipt(false)}
+                      className="absolute -top-12 right-0 p-2 bg-white/20 rounded-full text-white hover:bg-white/40 transition-colors"
+                    >
+                      <X className="w-6 h-6" />
+                    </button>
+                    <Receipt {...currentReceiptData} />
+                    <div className="mt-6 flex justify-center gap-4">
+                      <Button className="h-12 px-8 bg-success font-bold" onClick={() => window.print()}>
+                        <Printer className="mr-2 w-5 h-5" /> Print 80mm
+                      </Button>
+                    </div>
+                  </motion.div>
                 </motion.div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+              )}
+            </AnimatePresence>
 
-          {/* Owner Override Modal for Below-Cost Sales */}
-          <AnimatePresence>
-            {showOwnerOverride && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm"
-              >
+            {/* Owner Override Modal for Below-Cost Sales */}
+            <AnimatePresence>
+              {showOwnerOverride && (
                 <motion.div
-                  initial={{ scale: 0.9 }}
-                  animate={{ scale: 1 }}
-                  exit={{ scale: 0.9 }}
-                  className="glass-card rounded-2xl p-6 w-full max-w-xs mx-4 text-center space-y-4"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm"
                 >
-                  <ShieldAlert className="w-10 h-10 mx-auto text-destructive" />
-                  <h3 className="text-sm font-bold font-heading text-foreground">Below-Cost Sale Detected</h3>
-                  <div className="space-y-1">
-                    {belowCostItems.map(i => (
-                      <p key={i.product.id} className="text-[10px] text-destructive">
-                        {i.product.name}: price OMR {i.product.price.toFixed(3)} &lt; cost OMR {Number(i.product.cost).toFixed(3)}
-                      </p>
-                    ))}
-                  </div>
-                  <p className="text-xs text-muted-foreground">Enter Owner PIN to approve</p>
-                  <div className="flex justify-center gap-2">
-                    {[0, 1, 2, 3].map(i => (
-                      <div key={i} className={cn(
-                        'w-10 h-10 rounded-lg border-2 flex items-center justify-center text-lg font-bold',
-                        overridePin.length > i ? 'border-primary text-primary' : 'border-border text-transparent'
-                      )}>
-                        {overridePin.length > i ? '•' : ''}
-                      </div>
-                    ))}
-                  </div>
-                  <div className="grid grid-cols-3 gap-2 max-w-[200px] mx-auto">
-                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, null, 0, 'del'].map((key, i) =>
-                      key !== null ? (
-                        <button
-                          key={i}
-                          onClick={() => {
-                            if (key === 'del') {
-                              setOverridePin(prev => prev.slice(0, -1));
-                            } else {
-                              const newPin = overridePin + key;
-                              setOverridePin(newPin);
-                              if (newPin.length === 4) {
-                                setTimeout(() => handleOwnerOverride(newPin), 200);
+                  <motion.div
+                    initial={{ scale: 0.9 }}
+                    animate={{ scale: 1 }}
+                    exit={{ scale: 0.9 }}
+                    className="glass-card rounded-2xl p-6 w-full max-w-xs mx-4 text-center space-y-4"
+                  >
+                    <ShieldAlert className="w-10 h-10 mx-auto text-destructive" />
+                    <h3 className="text-sm font-bold font-heading text-foreground">Below-Cost Sale Detected</h3>
+                    <div className="space-y-1">
+                      {belowCostItems.map(i => (
+                        <p key={i.product.id} className="text-[10px] text-destructive">
+                          {i.product.name}: price OMR {i.product.price.toFixed(3)} &lt; cost OMR {Number(i.product.cost).toFixed(3)}
+                        </p>
+                      ))}
+                    </div>
+                    <p className="text-xs text-muted-foreground">Enter Owner PIN to approve</p>
+                    <div className="flex justify-center gap-2">
+                      {[0, 1, 2, 3].map(i => (
+                        <div key={i} className={cn(
+                          'w-10 h-10 rounded-lg border-2 flex items-center justify-center text-lg font-bold',
+                          overridePin.length > i ? 'border-primary text-primary' : 'border-border text-transparent'
+                        )}>
+                          {overridePin.length > i ? '•' : ''}
+                        </div>
+                      ))}
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 max-w-[200px] mx-auto">
+                      {[1, 2, 3, 4, 5, 6, 7, 8, 9, null, 0, 'del'].map((key, i) =>
+                        key !== null ? (
+                          <button
+                            key={i}
+                            onClick={() => {
+                              if (key === 'del') {
+                                setOverridePin(prev => prev.slice(0, -1));
+                              } else {
+                                const newPin = overridePin + key;
+                                setOverridePin(newPin);
+                                if (newPin.length === 4) {
+                                  setTimeout(() => handleOwnerOverride(newPin), 200);
+                                }
                               }
-                            }
-                          }}
-                          className="h-10 rounded-lg glass text-sm font-medium text-foreground hover:bg-primary/10 hover:text-primary transition-colors"
-                        >
-                          {key === 'del' ? '⌫' : key}
-                        </button>
-                      ) : <div key={i} />
-                    )}
-                  </div>
-                  <button
-                    onClick={() => { setShowOwnerOverride(false); setOverridePin(''); setPendingCheckoutMethod(null); }}
-                    className="text-xs text-muted-foreground hover:text-destructive transition-colors"
-                  >
-                    Cancel
-                  </button>
+                            }}
+                            className="h-10 rounded-lg glass text-sm font-medium text-foreground hover:bg-primary/10 hover:text-primary transition-colors"
+                          >
+                            {key === 'del' ? '⌫' : key}
+                          </button>
+                        ) : <div key={i} />
+                      )}
+                    </div>
+                    <button
+                      onClick={() => { setShowOwnerOverride(false); setOverridePin(''); setPendingCheckoutMethod(null); }}
+                      className="text-xs text-muted-foreground hover:text-destructive transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </motion.div>
                 </motion.div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div> {/* end flex-1 wrapper */}
+              )}
+            </AnimatePresence>
+          </div> {/* end flex-1 wrapper */}
 
-        {/* Mobile Cart Floating Action Button */}
-        {!mobileCartOpen && cart.length > 0 && (
-          <motion.div
-            initial={{ y: 100, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 100, opacity: 0 }}
-            className="md:hidden fixed bottom-4 left-4 right-4 z-40"
-          >
-            <button
-              onClick={() => setMobileCartOpen(true)}
-              className="w-full bg-primary text-primary-foreground shadow-[0_8px_30px_rgb(0,0,0,0.12)] shadow-primary/20 rounded-xl p-4 flex items-center justify-between font-bold"
+          {/* Mobile Cart Floating Action Button */}
+          {!mobileCartOpen && cart.length > 0 && (
+            <motion.div
+              initial={{ y: 100, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 100, opacity: 0 }}
+              className="md:hidden fixed bottom-4 left-4 right-4 z-40"
             >
-              <div className="flex items-center gap-2">
-                <div className="bg-black/20 px-2.5 py-1 rounded-lg text-xs backdrop-blur-sm">{cart.reduce((a, b) => a + b.quantity, 0)} items</div>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="uppercase tracking-wider text-sm">View Cart</span>
-                <span className="bg-black/20 px-2.5 py-1 rounded-lg text-xs backdrop-blur-sm">OMR {total.toFixed(3)}</span>
-              </div>
-            </button>
-          </motion.div>
-        )}
+              <button
+                onClick={() => setMobileCartOpen(true)}
+                className="w-full bg-primary text-primary-foreground shadow-[0_8px_30px_rgb(0,0,0,0.12)] shadow-primary/20 rounded-xl p-4 flex items-center justify-between font-bold"
+              >
+                <div className="flex items-center gap-2">
+                  <div className="bg-black/20 px-2.5 py-1 rounded-lg text-xs backdrop-blur-sm">{cart.reduce((a, b) => a + b.quantity, 0)} items</div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="uppercase tracking-wider text-sm">View Cart</span>
+                  <span className="bg-black/20 px-2.5 py-1 rounded-lg text-xs backdrop-blur-sm">OMR {total.toFixed(3)}</span>
+                </div>
+              </button>
+            </motion.div>
+          )}
 
-      </div> {/* end main container */}
+        </div> {/* end main container */}
 
-      {/* Vault Opening Animation Overlay */}
-      <AnimatePresence>
-        {showVaultAnimation && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] flex items-center justify-center bg-black"
-          >
-            <video
-              src={vaultVideo}
-              autoPlay
-              muted
-              playsInline
-              className="w-full h-full object-cover"
-            />
+        {/* Vault Opening Animation Overlay */}
+        <AnimatePresence>
+          {showVaultAnimation && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              transition={{ delay: 1 }}
-              className="absolute bottom-12 text-center"
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[100] flex items-center justify-center bg-black"
             >
-              <p className="text-gold text-lg font-bold font-heading text-glow tracking-widest">OWNER ACCESS</p>
-              <p className="text-muted-foreground text-xs mt-1">Authenticating...</p>
+              <video
+                src={vaultVideo}
+                autoPlay
+                muted
+                playsInline
+                className="w-full h-full object-cover"
+              />
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 1 }}
+                className="absolute bottom-12 text-center"
+              >
+                <p className="text-gold text-lg font-bold font-heading text-glow tracking-widest">OWNER ACCESS</p>
+                <p className="text-muted-foreground text-xs mt-1">Authenticating...</p>
+              </motion.div>
             </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          )}
+        </AnimatePresence>
 
-      {/* Admin Quick-Toggle PIN Pad */}
-      <AnimatePresence>
-        {showAdminToggle && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[90] flex items-center justify-center bg-background/90 backdrop-blur-lg"
-          >
+        {/* Admin Quick-Toggle PIN Pad */}
+        <AnimatePresence>
+          {showAdminToggle && (
             <motion.div
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.8, opacity: 0 }}
-              className="glass-card rounded-2xl p-8 w-full max-w-xs mx-4 text-center space-y-5 ring-2 ring-gold/30 shadow-[0_0_40px_-5px_hsl(var(--gold)/0.4)]"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[90] flex items-center justify-center bg-background/90 backdrop-blur-lg"
             >
-              <Crown className="w-10 h-10 mx-auto text-gold" />
-              <h3 className="text-sm font-bold font-heading text-foreground">Owner Authentication</h3>
-              <p className="text-xs text-muted-foreground">Enter Owner PIN to switch to Admin mode</p>
-              <div className="flex justify-center gap-3">
-                {[0, 1, 2, 3].map(i => (
-                  <motion.div
-                    key={i}
-                    animate={adminTogglePin.length > i ? { scale: [1, 1.2, 1] } : {}}
-                    className={cn(
-                      'w-12 h-12 rounded-xl border-2 flex items-center justify-center text-xl font-bold transition-all',
-                      adminTogglePin.length > i
-                        ? 'border-gold bg-gold/10 text-gold'
-                        : 'border-border/50 text-transparent'
-                    )}
-                  >
-                    {adminTogglePin.length > i ? '•' : ''}
-                  </motion.div>
-                ))}
-              </div>
-              <div className="grid grid-cols-3 gap-2 max-w-[220px] mx-auto">
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9, null, 0, 'del'].map((key, i) =>
-                  key !== null ? (
-                    <button
+              <motion.div
+                initial={{ scale: 0.8, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.8, opacity: 0 }}
+                className="glass-card rounded-2xl p-8 w-full max-w-xs mx-4 text-center space-y-5 ring-2 ring-gold/30 shadow-[0_0_40px_-5px_hsl(var(--gold)/0.4)]"
+              >
+                <Crown className="w-10 h-10 mx-auto text-gold" />
+                <h3 className="text-sm font-bold font-heading text-foreground">Owner Authentication</h3>
+                <p className="text-xs text-muted-foreground">Enter Owner PIN to switch to Admin mode</p>
+                <div className="flex justify-center gap-3">
+                  {[0, 1, 2, 3].map(i => (
+                    <motion.div
                       key={i}
-                      onClick={() => {
-                        if (key === 'del') {
-                          setAdminTogglePin(prev => prev.slice(0, -1));
-                        } else {
-                          const newPin = adminTogglePin + key;
-                          if (newPin.length <= 4) {
-                            setAdminTogglePin(newPin);
-                            if (newPin.length === 4) {
-                              setTimeout(() => handleAdminTogglePin(newPin), 200);
+                      animate={adminTogglePin.length > i ? { scale: [1, 1.2, 1] } : {}}
+                      className={cn(
+                        'w-12 h-12 rounded-xl border-2 flex items-center justify-center text-xl font-bold transition-all',
+                        adminTogglePin.length > i
+                          ? 'border-gold bg-gold/10 text-gold'
+                          : 'border-border/50 text-transparent'
+                      )}
+                    >
+                      {adminTogglePin.length > i ? '•' : ''}
+                    </motion.div>
+                  ))}
+                </div>
+                <div className="grid grid-cols-3 gap-2 max-w-[220px] mx-auto">
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, null, 0, 'del'].map((key, i) =>
+                    key !== null ? (
+                      <button
+                        key={i}
+                        onClick={() => {
+                          if (key === 'del') {
+                            setAdminTogglePin(prev => prev.slice(0, -1));
+                          } else {
+                            const newPin = adminTogglePin + key;
+                            if (newPin.length <= 4) {
+                              setAdminTogglePin(newPin);
+                              if (newPin.length === 4) {
+                                setTimeout(() => handleAdminTogglePin(newPin), 200);
+                              }
                             }
                           }
-                        }
-                      }}
-                      className="h-12 rounded-xl glass text-base font-semibold text-foreground hover:bg-gold/10 hover:text-gold transition-all"
-                    >
-                      {key === 'del' ? '⌫' : key}
-                    </button>
-                  ) : <div key={i} />
-                )}
-              </div>
-              <button
-                onClick={() => { setShowAdminToggle(false); setAdminTogglePin(''); }}
-                className="text-xs text-muted-foreground hover:text-destructive transition-colors"
-              >
-                Cancel
-              </button>
+                        }}
+                        className="h-12 rounded-xl glass text-base font-semibold text-foreground hover:bg-gold/10 hover:text-gold transition-all"
+                      >
+                        {key === 'del' ? '⌫' : key}
+                      </button>
+                    ) : <div key={i} />
+                  )}
+                </div>
+                <button
+                  onClick={() => { setShowAdminToggle(false); setAdminTogglePin(''); }}
+                  className="text-xs text-muted-foreground hover:text-destructive transition-colors"
+                >
+                  Cancel
+                </button>
+              </motion.div>
             </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          )}
+        </AnimatePresence>
 
-      {/* Quick Add Product Dialog */}
-      <QuickAddProduct
-        open={quickAddOpen}
-        onOpenChange={setQuickAddOpen}
-        prefillBarcode={quickAddBarcode}
-        prefillName={quickAddName}
-        onProductAdded={handleQuickProductAdded}
-      />
+        {/* Quick Add Product Dialog */}
+        <QuickAddProduct
+          open={quickAddOpen}
+          onOpenChange={setQuickAddOpen}
+          prefillBarcode={quickAddBarcode}
+          prefillName={quickAddName}
+          onProductAdded={handleQuickProductAdded}
+        />
+      </div>
     </>
   );
 };

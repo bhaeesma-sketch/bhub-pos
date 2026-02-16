@@ -81,7 +81,8 @@ export const KhatLedger: React.FC = () => {
 
     const sendWhatsAppReminder = () => {
         if (!selectedKhat) return;
-        const message = `Hi ${selectedKhat.name}, this is a friendly reminder from your store. Your outstanding balance in our Khat ledger is OMR ${selectedKhat.balance.toFixed(3)}. Thank you!`;
+        const storeName = localStorage.getItem('bhub_store_name') || 'B-HUB POS';
+        const message = `Reminder from ${storeName}: Your current balance is OMR ${selectedKhat.balance.toFixed(3)}.`;
         const url = `https://wa.me/${selectedKhat.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(message)}`;
         window.open(url, '_blank');
         toast.info('Opening WhatsApp...');
@@ -120,8 +121,8 @@ export const KhatLedger: React.FC = () => {
                             key={khat.phone}
                             onClick={() => setSelectedKhat(khat)}
                             className={`w-full p-4 rounded-xl text-left transition-all ${selectedKhat?.phone === khat.phone
-                                    ? 'bg-primary text-primary-foreground shadow-lg scale-[0.98]'
-                                    : 'hover:bg-muted'
+                                ? 'bg-primary text-primary-foreground shadow-lg scale-[0.98]'
+                                : 'hover:bg-muted'
                                 }`}
                         >
                             <div className="flex justify-between items-start mb-1">

@@ -1,17 +1,15 @@
 import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
-  LayoutDashboard,
   ShoppingCart,
   Package,
   Users,
   Receipt,
   BarChart3,
   Settings,
+  ShieldCheck,
   ChevronLeft,
   ChevronRight,
-  Smartphone,
-  Crown,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -19,13 +17,12 @@ import logoIcon from '@/assets/logo-icon.png';
 import { useStaffSession } from '@/contexts/StaffContext';
 
 const allMenuItems = [
-  { icon: LayoutDashboard, label: 'Dashboard', path: '/', ownerOnly: true },
-  { icon: ShoppingCart, label: 'Terminal / POS', path: '/pos', ownerOnly: false },
-  { icon: Receipt, label: 'Digital Ledger', path: '/bhub/khat', ownerOnly: false },
-  { icon: Package, label: 'Inventory', path: '/products', ownerOnly: false },
-  { icon: BarChart3, label: 'Analytics', path: '/reports', ownerOnly: true },
-  { icon: Smartphone, label: 'Remote Monitor', path: '/bhub/owner/STORE001', ownerOnly: true },
-  { icon: Users, label: 'Customers', path: '/customers', ownerOnly: false },
+  { icon: ShoppingCart, label: 'Register', path: '/pos', ownerOnly: false },
+  { icon: Receipt, label: 'Khat', path: '/bhub/khat', ownerOnly: false },
+  { icon: Package, label: 'Inventory', path: '/products', ownerOnly: true },
+  { icon: ShieldCheck, label: 'Audit', path: '/audit', ownerOnly: true },
+  { icon: BarChart3, label: 'Reports', path: '/reports', ownerOnly: true },
+  { icon: Users, label: 'Clients', path: '/customers', ownerOnly: true },
   { icon: Settings, label: 'Settings', path: '/settings', ownerOnly: true },
 ];
 
@@ -35,57 +32,38 @@ const Sidebar = () => {
   const navigate = useNavigate();
   const { staffSession } = useStaffSession();
 
-  const isStaffOnly = staffSession?.role === 'staff';
   const isOwner = staffSession?.role === 'owner';
-  const menuItems = isStaffOnly
-    ? allMenuItems.filter(item => !item.ownerOnly)
-    : allMenuItems;
+  const menuItems = isOwner
+    ? allMenuItems
+    : allMenuItems.filter(item => !item.ownerOnly);
 
   return (
     <motion.aside
-      animate={{ width: collapsed ? 72 : 260 }}
+      animate={{ width: collapsed ? 80 : 240 }}
       transition={{ duration: 0.2, ease: 'easeInOut' }}
       className={cn(
-        "h-screen flex flex-col glass-strong sticky top-0 z-40",
-        isOwner && "border-r-2 border-gold/30",
-        isStaffOnly && "border-r-2 border-info/30"
+        "h-screen flex flex-col sticky top-0 z-40 bg-sidebar border-r border-sidebar-border",
       )}
     >
-      {/* Logo */}
-      <div className="flex items-center gap-3 px-4 h-16 border-b border-border/50">
-        <div className="w-9 h-9 rounded-lg overflow-hidden flex-shrink-0 relative">
-          <img src={logoIcon} alt="BHAEES POS" className="w-full h-full object-cover" />
-          {isOwner && (
-            <div className="absolute -top-0.5 -right-0.5">
-              <Crown className="w-3 h-3 text-gold" />
-            </div>
-          )}
+      {/* Logo Section */}
+      <div className="flex flex-col items-center justify-center pt-8 pb-8 border-b border-sidebar-border/50">
+        <div className="w-14 h-14 rounded-full border-2 border-gold p-1 shadow-[0_0_20px_rgba(212,175,55,0.2)] bg-background/50 overflow-hidden relative group cursor-pointer transition-transform active:scale-95">
+          <img src={logoIcon} alt="BHAEES" className="w-full h-full object-cover rounded-full transition-transform duration-500 group-hover:scale-110" />
         </div>
-        <AnimatePresence>
-          {!collapsed && (
-            <motion.div
-              initial={{ opacity: 0, width: 0 }}
-              animate={{ opacity: 1, width: 'auto' }}
-              exit={{ opacity: 0, width: 0 }}
-              className="overflow-hidden whitespace-nowrap"
-            >
-              <h1 className="text-sm font-bold font-heading text-foreground tracking-tight">
-                <span className="text-primary">B-HUB</span>{' '}
-                <span className="text-gold">POS</span>
-              </h1>
-              <p className={cn(
-                "text-[10px] tracking-widest uppercase",
-                isOwner ? "text-gold" : isStaffOnly ? "text-info" : "text-muted-foreground"
-              )}>
-                {isOwner ? '👑 Owner Mode' : isStaffOnly ? '🔵 Staff Mode' : 'Premium Retail'}
-              </p>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {!collapsed && (
+          <motion.div
+            initial={{ opacity: 0, y: 5 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-4 text-center px-4"
+          >
+            <h1 className="text-[10px] font-black text-gold tracking-[0.3em] uppercase leading-none mb-1">B-HUB RETAIL</h1>
+            <p className="text-[8px] font-bold text-muted-foreground uppercase tracking-widest opacity-50">Enterprise Edition</p>
+          </motion.div>
+        )}
       </div>
 
-      {/* Menu */}
-      <nav className="flex-1 py-4 px-2 space-y-1 overflow-y-auto pos-scrollbar">
+      {/* Menu Section */}
+      <nav className="flex-1 py-6 px-3 space-y-1.5 overflow-y-auto pos-scrollbar">
         {menuItems.map((item) => {
           const isActive = location.pathname === item.path;
           return (
@@ -93,66 +71,58 @@ const Sidebar = () => {
               key={item.path}
               onClick={() => navigate(item.path)}
               className={cn(
-                'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200',
+                'w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-bold transition-all duration-300 relative group',
                 isActive
-                  ? isOwner
-                    ? 'bg-gold/20 text-gold shadow-[0_0_15px_-3px_hsl(var(--gold)/0.3)]'
-                    : 'gradient-cyan text-primary-foreground glow-cyan-strong'
-                  : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+                  ? 'bg-primary text-primary-foreground shadow-[0_8px_16px_-4px_rgba(34,197,94,0.3)]'
+                  : 'text-muted-foreground hover:bg-sidebar-accent hover:text-foreground'
               )}
             >
-              <item.icon className="w-5 h-5 flex-shrink-0" />
+              <item.icon className={cn("w-5 h-5 flex-shrink-0 transition-transform group-active:scale-90", isActive ? "text-primary-foreground" : "text-muted-foreground group-hover:text-primary")} />
               <AnimatePresence>
                 {!collapsed && (
                   <motion.span
-                    initial={{ opacity: 0, width: 0 }}
-                    animate={{ opacity: 1, width: 'auto' }}
-                    exit={{ opacity: 0, width: 0 }}
-                    className="overflow-hidden whitespace-nowrap"
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -10 }}
+                    className="overflow-hidden whitespace-nowrap tracking-tight"
                   >
                     {item.label}
                   </motion.span>
                 )}
               </AnimatePresence>
+              {isActive && (
+                <motion.div
+                  layoutId="active-indicator"
+                  className="absolute left-[-12px] w-1 h-6 bg-primary rounded-r-full"
+                />
+              )}
             </button>
           );
         })}
       </nav>
 
-      {/* Role Badge + Collapse Toggle */}
-      <div className="p-2 border-t border-border/50 space-y-1">
-        {staffSession && !collapsed && (
-          <div className={cn(
-            "flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium",
-            isOwner ? "bg-gold/10 text-gold" : "bg-info/10 text-info"
-          )}>
-            {isOwner && <Crown className="w-3.5 h-3.5" />}
-            <span>{staffSession.name}</span>
-            <span className={cn(
-              "text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase",
-              isOwner ? "bg-gold/20" : "bg-info/20"
-            )}>
-              {staffSession.role}
-            </span>
+      {/* User / Settings Footer */}
+      <div className="p-3 border-t border-sidebar-border/50">
+        <div className={cn(
+          "flex items-center gap-2 p-2 rounded-xl transition-all",
+          collapsed ? "justify-center" : "bg-muted/30"
+        )}>
+          <div className="w-8 h-8 rounded-lg bg-gold/10 flex items-center justify-center text-gold">
+            <Users className="w-4 h-4" />
           </div>
-        )}
+          {!collapsed && (
+            <div className="flex-1 min-w-0 pr-2">
+              <p className="text-[10px] font-black text-foreground truncate uppercase">{staffSession?.name}</p>
+              <p className="text-[8px] font-bold text-gold uppercase tracking-tighter">{staffSession?.role}</p>
+            </div>
+          )}
+        </div>
+
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="w-full flex items-center justify-center gap-3 px-3 py-2.5 rounded-lg text-sm text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
+          className="mt-3 w-full flex items-center justify-center h-10 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all border border-transparent hover:border-sidebar-border/30"
         >
-          {collapsed ? <ChevronRight className="w-5 h-5" /> : <ChevronLeft className="w-5 h-5" />}
-          <AnimatePresence>
-            {!collapsed && (
-              <motion.span
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="overflow-hidden whitespace-nowrap"
-              >
-                Collapse
-              </motion.span>
-            )}
-          </AnimatePresence>
+          {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
         </button>
       </div>
     </motion.aside>

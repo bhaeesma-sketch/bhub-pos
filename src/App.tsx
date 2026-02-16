@@ -19,7 +19,11 @@ import { useStaffSession } from "./contexts/StaffContext";
 import { useState } from "react";
 import { KhatLedger } from "./components/bhub/KhatLedger";
 import { OwnerRemoteDashboard } from "./components/bhub/OwnerRemoteDashboard";
+import Audit from "./pages/Audit";
 import NotFound from "./pages/NotFound";
+
+import { useStoreConfig } from "./hooks/useSupabaseData";
+import { useEffect } from "react";
 
 const queryClient = new QueryClient();
 
@@ -29,6 +33,16 @@ const RootRouter = () => {
     () => localStorage.getItem('bhub_onboarding_complete') === 'true'
   );
 
+  // Load store config globally
+  const { data: storeConfig } = useStoreConfig();
+
+  useEffect(() => {
+    if (storeConfig) {
+      // Use bracket notation to bypass temporal type mismatch
+      console.log('Store Config Loaded:', (storeConfig as any)['store_name']);
+    }
+  }, [storeConfig]);
+
   if (!onboardingComplete) {
     return <OnboardingFlow onComplete={() => setOnboardingComplete(true)} />;
   }
@@ -36,6 +50,7 @@ const RootRouter = () => {
   if (!staffSession) {
     return (
       <LoginScreen
+        onStartOnboarding={() => setOnboardingComplete(false)}
         onLoginSuccess={(user, store) => {
           setStaffSession({
             id: user.id,
@@ -61,6 +76,7 @@ const RootRouter = () => {
         <Route path="/reports" element={<Reports />} />
         <Route path="/owner" element={<OwnerDashboard />} />
         <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/audit" element={<Audit />} />
 
         {/* Integrated Cloud Features */}
         <Route path="/bhub/khat" element={<KhatLedger />} />

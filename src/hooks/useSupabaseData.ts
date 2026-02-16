@@ -169,3 +169,24 @@ export function useStaffAlerts() {
     refetchInterval: 10000, // poll every 10s for live updates
   });
 }
+
+// ========== STORE CONFIG ==========
+export function useStoreConfig() {
+  return useQuery({
+    queryKey: ['store_config'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('store_config')
+        .select('*')
+        .single();
+      if (error) throw error;
+
+      // Cache in localStorage as well for offline fallback
+      if (data) {
+        localStorage.setItem('bhub_store_name', data.store_name);
+        localStorage.setItem('bhub_vat_number', data.vat_number || '');
+      }
+      return data;
+    },
+  });
+}

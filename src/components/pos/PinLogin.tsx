@@ -136,18 +136,19 @@ const PinLogin = ({ onLogin }: PinLoginProps) => {
           </motion.p>
         )}
 
-        {/* Numpad */}
-        <div className="grid grid-cols-3 gap-2">
+        {/* Numpad - Large Touch Targets */}
+        <div className="grid grid-cols-3 gap-3 p-2">
           {[1, 2, 3, 4, 5, 6, 7, 8, 9, null, 0, 'del'].map((key, i) =>
             key !== null ? (
               <motion.button
                 key={i}
-                whileTap={{ scale: 0.95 }}
+                whileTap={{ scale: 0.92 }}
                 onClick={() => handleKeyPress(key)}
                 disabled={loading}
                 className={cn(
-                  'h-14 rounded-xl glass text-base font-semibold text-foreground hover:bg-primary/10 hover:text-primary transition-all',
-                  loading && 'opacity-50 cursor-not-allowed'
+                  'h-20 rounded-2xl glass text-2xl font-black text-foreground hover:bg-primary/10 hover:text-primary transition-all shadow-md flex items-center justify-center',
+                  loading && 'opacity-50 cursor-not-allowed',
+                  key === 'del' ? 'text-destructive bg-destructive/5' : ''
                 )}
               >
                 {key === 'del' ? '⌫' : key}

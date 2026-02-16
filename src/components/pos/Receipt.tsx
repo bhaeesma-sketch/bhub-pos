@@ -22,6 +22,7 @@ interface ReceiptProps {
     total: number;
     paymentMethod: string;
     customerName?: string;
+    qrCode?: string;
 }
 
 export const Receipt: React.FC<ReceiptProps> = ({
@@ -35,10 +36,11 @@ export const Receipt: React.FC<ReceiptProps> = ({
     discount,
     total,
     paymentMethod,
-    customerName
+    customerName,
+    qrCode
 }) => {
-    // Fawtara/OTA Compliant QR logic (Mocking TLV base64 for now)
-    const qrValue = JSON.stringify({
+    // Fallback if specialized TLV is not provided
+    const qrValue = qrCode || JSON.stringify({
         seller: storeName,
         vat: vatin,
         timestamp: date,
@@ -118,7 +120,7 @@ export const Receipt: React.FC<ReceiptProps> = ({
                     </div>
                 )}
                 <div className="flex justify-between">
-                    <span>VAT (5%) / الضريبة:</span>
+                    <span>VAT (5% Incl.) / ضريبة:</span>
                     <span>OMR {vatAmount.toFixed(3)}</span>
                 </div>
                 <div className="flex justify-between text-base border-t border-black pt-2">

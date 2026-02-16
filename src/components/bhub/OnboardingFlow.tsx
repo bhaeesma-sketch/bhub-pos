@@ -20,14 +20,14 @@ export const OnboardingFlow: React.FC<OnboardingProps> = ({ onComplete }) => {
     const [userData, setUserData] = useState({
         name: '',
         email: '',
-        phone: '',
-        password: '',
+        phone: '+968 ',
+        password: '1234', // Default PIN for Dukkantek style
     });
 
     const [storeData, setStoreData] = useState({
         storeName: '',
+        legalName: '',
         crNumber: '',
-        location: '',
         currency: 'OMR',
     });
 
@@ -50,7 +50,7 @@ export const OnboardingFlow: React.FC<OnboardingProps> = ({ onComplete }) => {
         try {
             await new Promise(resolve => setTimeout(resolve, 2000));
 
-            const storeId = `STORE-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+            const storeId = storeData.storeName.toLowerCase().replace(/\s+/g, '-') + '-' + Math.random().toString(36).substr(2, 4);
 
             const config = {
                 ...storeData,
@@ -59,40 +59,43 @@ export const OnboardingFlow: React.FC<OnboardingProps> = ({ onComplete }) => {
                 storeId,
             };
 
+            // 1. Create Store Config in Supabase
+            const { error: configError } = await (supabase.from('store_config' as any) as any).upsert({
+                store_name: storeData.storeName,
+                vat_number: vatData.isVatEnabled ? vatData.vatin : null,
+                address: storeData.legalName,
+                currency: 'OMR'
+            });
+
+            if (configError) console.error('Store config error:', configError);
+
             localStorage.setItem('bhub_store_config', JSON.stringify(config));
             localStorage.setItem('bhub_onboarding_complete', 'true');
-            localStorage.setItem('bhub_admin_username', userData.email || userData.name);
-            localStorage.setItem('bhub_admin_password', userData.password);
+            localStorage.setItem('bhub_store_name', storeData.storeName);
+            localStorage.setItem('bhub_vat_number', vatData.vatin);
             localStorage.setItem('bhub_store_id', storeId);
 
-            // Seed the staff table with the owner record so POS PINs work immediately
+            // 2. Seed the staff table with the owner record
             const { error: staffError } = await supabase.from('staff').insert({
                 name: userData.name,
-                pin: userData.password,
+                pin: '1234', // Dukkantek default owner PIN
                 role: 'owner',
                 is_active: true
             });
 
             if (staffError) {
                 console.error('Supabase staff insert error:', staffError);
-                if (staffError.message.includes('schema cache') || staffError.message.includes('does not exist')) {
-                    toast.warning('Business launched in Local Mode. Cloud tables missing.', {
-                        description: 'Please check FIX_DATABASE.sql to enable cloud sync.',
-                        duration: 10000
-                    });
-                } else {
-                    throw new Error(staffError.message);
-                }
+                toast.warning('Offline Mode Active. Cloud sync pending.');
             } else {
-                toast.success(`Welcome aboard! Your Store ID is ${storeId}`, {
-                    description: 'Redirecting to your new dashboard...',
+                toast.success(`Business Registered: ${storeData.storeName}`, {
+                    description: 'Owner PIN is 1234. Store ID saved.',
                 });
             }
 
-            onComplete(config, userData.password);
+            onComplete(config, '1234');
         } catch (error: any) {
             console.error('Onboarding finalize error:', error);
-            toast.error('Failed to complete onboarding: ' + (error.message || 'Unknown error'));
+            toast.error('Registration failed: ' + (error.message || 'Unknown error'));
         } finally {
             setIsLoading(false);
         }
@@ -262,13 +265,13 @@ export const OnboardingFlow: React.FC<OnboardingProps> = ({ onComplete }) => {
                                             />
                                         </div>
                                         <div className="space-y-1.5">
-                                            <Label htmlFor="location" className="text-[10px] font-black uppercase text-muted-foreground tracking-widest px-1">Region</Label>
+                                            <Label htmlFor="legalName" className="text-[10px] font-black uppercase text-muted-foreground tracking-widest px-1">Legal Entity / Address</Label>
                                             <Input
-                                                id="location"
+                                                id="legalName"
                                                 className="h-12 rounded-xl glass border-border/40 px-4 font-semibold"
-                                                placeholder="Muscat, Om"
-                                                value={storeData.location}
-                                                onChange={e => setStoreData({ ...storeData, location: e.target.value })}
+                                                placeholder="LLC / Sole Prop."
+                                                value={storeData.legalName}
+                                                onChange={e => setStoreData({ ...storeData, legalName: e.target.value })}
                                             />
                                         </div>
                                     </div>
