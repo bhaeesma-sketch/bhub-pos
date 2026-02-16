@@ -86,12 +86,12 @@ export const BulkImportModal: React.FC<{
                 const row = rows[i];
 
                 // Smart Header Mapping
-                const barcode = findColumn(row, ['Barcode', 'SKU', 'Bar Code', 'Code', 'Item Code', 'ItemCode', 'Id'])?.toString().trim();
+                const barcode = findColumn(row, ['Product Code', 'Barcode', 'SKU', 'Bar Code', 'Code', 'Item Code', 'ItemCode', 'Id'])?.toString().trim();
                 const name = findColumn(row, ['Name', 'Product Name', 'Item Name', 'Product name', 'Description', 'Label'])?.toString().trim();
                 const category = findColumn(row, ['Category', 'Dept', 'Department', 'Group', 'Type'])?.toString().trim() || 'General';
-                const cost = parseFloat(findColumn(row, ['Cost Price', 'Cost', 'Unit Cost', 'Buying Price', 'Purchase Price', 'Total stock value ']) || '0');
+                const cost = parseFloat(findColumn(row, ['Avg Cost', 'Cost Price', 'Cost', 'Unit Cost', 'Buying Price', 'Purchase Price', 'Total stock value ']) || '0');
                 const price = parseFloat(findColumn(row, ['Sale Price', 'Price', 'Selling Price', 'Unit Price', 'MRP', 'Value']) || '0');
-                const stock = parseInt(findColumn(row, ['Current Stock', 'Stock', 'Quantity', 'Qty', 'In Stock', 'Count']) || '0');
+                const stock = parseInt(findColumn(row, ['Current Stock', 'Stock', 'Quantity', 'Qty', 'In Stock', 'Count', 'stock']) || '0');
 
                 // Validation
                 if (!barcode && !name) {

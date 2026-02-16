@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 
 interface OnboardingProps {
     onComplete: (config: any, adminPassword: string) => void;
@@ -65,19 +66,33 @@ export const OnboardingFlow: React.FC<OnboardingProps> = ({ onComplete }) => {
             localStorage.setItem('bhub_store_id', storeId);
 
             // Seed the staff table with the owner record so POS PINs work immediately
-            await supabase.from('staff').insert({
+            const { error: staffError } = await supabase.from('staff').insert({
                 name: userData.name,
                 pin: userData.password,
                 role: 'owner',
                 is_active: true
             });
 
-            toast.success(`Welcome aboard! Your Store ID is ${storeId}`, {
-                description: 'Redirecting to your new dashboard...',
-            });
+            if (staffError) {
+                console.error('Supabase staff insert error:', staffError);
+                if (staffError.message.includes('schema cache') || staffError.message.includes('does not exist')) {
+                    toast.warning('Business launched in Local Mode. Cloud tables missing.', {
+                        description: 'Please check FIX_DATABASE.sql to enable cloud sync.',
+                        duration: 10000
+                    });
+                } else {
+                    throw new Error(staffError.message);
+                }
+            } else {
+                toast.success(`Welcome aboard! Your Store ID is ${storeId}`, {
+                    description: 'Redirecting to your new dashboard...',
+                });
+            }
+
             onComplete(config, userData.password);
-        } catch (error) {
-            toast.error('Failed to complete onboarding');
+        } catch (error: any) {
+            console.error('Onboarding finalize error:', error);
+            toast.error('Failed to complete onboarding: ' + (error.message || 'Unknown error'));
         } finally {
             setIsLoading(false);
         }

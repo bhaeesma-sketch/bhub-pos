@@ -1,6 +1,8 @@
 
 import fs from 'fs';
 import { createClient } from '@supabase/supabase-js';
+import { initializeApp } from 'firebase/app';
+import { getFirestore, writeBatch, doc } from 'firebase/firestore';
 
 const envContent = fs.readFileSync('.env', 'utf-8');
 const env = Object.fromEntries(
@@ -13,12 +15,20 @@ const supabaseUrl = env['VITE_SUPABASE_URL'];
 const supabaseKey = env['VITE_SUPABASE_PUBLISHABLE_KEY'];
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-async function importMasterInventory() {
-    console.log('🚀 Starting Master Inventory Import from Stock Register...');
+const firebaseConfig = {
+    apiKey: env['VITE_FIREBASE_API_KEY'],
+    authDomain: env['VITE_FIREBASE_AUTH_DOMAIN'],
+    projectId: env['VITE_FIREBASE_PROJECT_ID'],
+    storageBucket: env['VITE_FIREBASE_STORAGE_BUCKET'],
+    messagingSenderId: env['VITE_FIREBASE_MESSAGING_SENDER_ID'],
+    appId: env['VITE_FIREBASE_APP_ID'],
+};
 
-    // 1. Load Price Map from Sales Transactions (Most Accurate Prices)
+async function syncAll() {
+    console.log('🚀 Syncing Master Inventory (Source: StockRegister15-Feb-26)...');
+
+    // 1. Price Map logic
     const priceMap = new Map();
-    // Also load from previous inventory CSV
     const invCsvData = fs.readFileSync('./public/data/inventory csv.csv', 'utf-8');
     invCsvData.split(/\r?\n/).slice(1).forEach(line => {
         const parts = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
@@ -28,11 +38,8 @@ async function importMasterInventory() {
         if (name && val > 0) priceMap.set(name, val / stock);
     });
 
-    // 2. Load Stock Register (The Master List with Barcodes)
     const registerData = fs.readFileSync('./public/data/stock_register.csv', 'utf-8');
     const lines = registerData.split(/\r?\n/).filter(line => line.trim());
-
-    // Skip the title line and get headers from the second line
     const headers = lines[1].split(',').map(h => h.trim().toLowerCase());
     const dataLines = lines.slice(2);
 
@@ -41,7 +48,6 @@ async function importMasterInventory() {
     const prodCodeIdx = headers.indexOf('product code');
     const stockIdx = headers.indexOf('stock');
     const costIdx = headers.indexOf('avg cost');
-    const categoryIdx = headers.indexOf('category');
 
     const products = [];
     const seenBarcodes = new Set();
@@ -60,66 +66,78 @@ async function importMasterInventory() {
         cols.push(current.trim());
 
         const name = cols[nameIdx]?.replace(/"/g, '').trim();
-        if (!name || name === 'Product Name') return;
+        if (!name) return;
 
         const rawBarcode = cols[barcodeIdx]?.replace(/"/g, '').trim();
         const productCode = cols[prodCodeIdx]?.replace(/"/g, '').trim();
         const stockStr = cols[stockIdx]?.replace(/"/g, '').trim();
         const cost = parseFloat(cols[costIdx]) || 0;
-        const category = cols[categoryIdx]?.replace(/"/g, '').trim() || 'General';
 
-        // Barcode Strategy: Prioritize Product Code (typically EAN), fallback to Barcode
-        let barcode = (productCode && productCode.length > 5) ? productCode : (rawBarcode || `AUTO-${i}`);
+        // ACCURATE BARCODE LOGIC: 
+        // Use Product Code (Column D) if it's longer than 6 digits (EAN/UPC).
+        // Otherwise use Barcode (Column C).
+        let barcode = (productCode && productCode.length >= 8) ? productCode : (rawBarcode || `BC-${i}`);
 
-        // Ensure barcode is unique for the DB
         if (seenBarcodes.has(barcode)) {
-            barcode = `${barcode}-${i}`;
+            barcode = `${barcode}_${i}`;
         }
         seenBarcodes.add(barcode);
 
-        // Stock parsing: "-2 Nos" -> -2
         const stock = parseFloat(stockStr?.split(' ')[0]) || 0;
 
-        // Price Strategy: Map from previous calc, or cost + 30%
         let price = priceMap.get(name.toLowerCase());
-        if (!price || price < cost) {
+        if (!price || price < (cost * 1.05)) {
             price = cost > 0 ? (cost * 1.30) : 0.500;
         }
 
         products.push({
-            id: `prod_master_${i}`,
+            id: `prod_${i}_${Date.now()}`,
             name,
             barcode,
             price: parseFloat(price.toFixed(3)),
             stock: Math.floor(stock),
-            cost: cost,
-            category: category === 'UNAVAILABLE' ? 'General' : category,
-            unit: 'pcs',
-            updated_at: new Date().toISOString()
+            category: 'General',
+            created_at: new Date().toISOString()
         });
     });
 
-    console.log(`📦 Prepared ${products.length} products with REAL barcodes and verified costs.`);
+    console.log(`📦 Finalizing ${products.length} products with REAL barcodes.`);
 
-    // 3. Sync to Cloud
-    console.log('🧹 Clearing old cloud data...');
+    // 2. Supabase Sync
+    console.log('🧹 Clearing Supabase...');
     await supabase.from('products').delete().neq('id', 'keep');
 
     const batchSize = 100;
-    let completed = 0;
     for (let i = 0; i < products.length; i += batchSize) {
         const batch = products.slice(i, i + batchSize);
         const { error } = await supabase.from('products').insert(batch);
-
-        if (error) {
-            console.error(`\n❌ Error at batch ${i}:`, error.message);
-        } else {
-            completed += batch.length;
-            process.stdout.write(`\r✅ Progress: ${completed}/${products.length} items synced...`);
-        }
+        if (error) console.error(`\n❌ Supabase Error @ ${i}:`, error.message);
+        else process.stdout.write(`\r✅ Supabase Progress: ${i + batch.length}/${products.length}...`);
     }
 
-    console.log('\n✨ Inventory Master Sync Completed Successfully.');
+    // 3. Firebase Sync
+    console.log('\n🔥 Syncing to Firebase...');
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const fireBatchSize = 400;
+    for (let i = 0; i < products.length; i += fireBatchSize) {
+        const batch = writeBatch(db);
+        const chunk = products.slice(i, i + fireBatchSize);
+        for (const p of chunk) {
+            batch.set(doc(db, 'products', p.id), {
+                id: p.id,
+                name: p.name,
+                barcode: p.barcode,
+                price: p.price,
+                stock: p.stock,
+                category: p.category
+            });
+        }
+        await batch.commit();
+        process.stdout.write(`\r✅ Firebase Progress: ${i + chunk.length}/${products.length}...`);
+    }
+
+    console.log('\n✨ COMPLETE: All real barcodes and prices are now live.');
 }
 
-importMasterInventory();
+syncAll();

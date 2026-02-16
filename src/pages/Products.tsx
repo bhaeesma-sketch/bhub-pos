@@ -230,7 +230,7 @@ const Products = () => {
               <button
                 onClick={async () => {
                   try {
-                    const res = await fetch('/data/inventory csv.csv');
+                    const res = await fetch('/data/stock_register.csv');
                     if (!res.ok) throw new Error('Could not find inventory file');
                     const text = await res.text();
                     toast.promise(async () => {
@@ -243,7 +243,7 @@ const Products = () => {
                       error: 'Failed to read data'
                     });
                   } catch (err) {
-                    toast.error('Inventory file not found in public/data/');
+                    toast.error('Stock Register file not found in public/data/');
                   }
                 }}
                 className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary/10 text-primary text-sm font-medium hover:bg-primary/20 transition-colors"

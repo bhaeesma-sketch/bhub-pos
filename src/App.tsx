@@ -36,12 +36,15 @@ const RootRouter = () => {
   if (!staffSession) {
     return (
       <LoginScreen
-        onLoginSuccess={(user) => {
+        onLoginSuccess={(user, store) => {
           setStaffSession({
             id: user.id,
             name: user.fullName,
             role: user.role === 'admin' ? 'owner' : 'staff',
           });
+          if (store) {
+            localStorage.setItem('bhub_current_store', JSON.stringify(store));
+          }
         }}
       />
     );
