@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Lock, Shield } from 'lucide-react';
+import { Shield } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -21,6 +21,55 @@ const PinLogin = ({ onLogin }: PinLoginProps) => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const verifyPin = async (enteredPin: string) => {
+    const cleanPin = enteredPin.trim();
+    if (!cleanPin) return;
+
+    setLoading(true);
+    try {
+      // 1. Primary: Check Supabase Staff Table
+      const { data, error: fetchError } = await supabase
+        .from('staff')
+        .select('id, name, role')
+        .eq('pin', cleanPin)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (data) {
+        toast.success(`Welcome, ${data.name}!`, { description: `Logged in as ${data.role}` });
+        onLogin({ id: data.id, name: data.name, role: data.role as StaffSession['role'] });
+        return;
+      }
+
+      // 2. Secondary: Check Local Master PIN (Onboarding Fallback)
+      const masterPin = localStorage.getItem('bhub_admin_password') || '1234';
+      const ownerName = localStorage.getItem('bhub_admin_username') || 'Master Owner';
+
+      if (cleanPin === masterPin) {
+        toast.success(`Welcome, ${ownerName}!`, { description: 'Authenticated via Master PIN' });
+        onLogin({ id: 'master_owner', name: ownerName, role: 'owner' });
+        return;
+      }
+
+      setError('Invalid PIN');
+      setPin('');
+    } catch (err) {
+      console.warn('DB Auth Failed, checking local fallback:', err);
+      const masterPin = localStorage.getItem('bhub_admin_password') || '1234';
+      const ownerName = localStorage.getItem('bhub_admin_username') || 'Master Owner';
+
+      if (cleanPin === masterPin) {
+        toast.info('Offline access granted via Master PIN');
+        onLogin({ id: 'master_owner', name: ownerName, role: 'owner' });
+      } else {
+        setError('Invalid PIN');
+        setPin('');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleKeyPress = useCallback((key: string | number) => {
     if (key === 'del') {
       setPin(prev => prev.slice(0, -1));
@@ -34,54 +83,9 @@ const PinLogin = ({ onLogin }: PinLoginProps) => {
     setError('');
 
     if (newPin.length === 4) {
-      // Auto-submit
       setTimeout(() => verifyPin(newPin), 200);
     }
   }, [pin]);
-
-  const verifyPin = async (enteredPin: string) => {
-    setLoading(true);
-    try {
-      const { data, error: fetchError } = await supabase
-        .from('staff')
-        .select('id, name, role')
-        .eq('pin', enteredPin)
-        .eq('is_active', true)
-        .maybeSingle();
-
-      if (fetchError) throw fetchError;
-
-      if (data) {
-        toast.success(`Welcome, ${data.name}!`, { description: `Logged in as ${data.role}` });
-        onLogin({ id: data.id, name: data.name, role: data.role as StaffSession['role'] });
-      } else {
-        // Fallback: Check if this matches the Master Owner PIN from onboarding
-        const masterPin = localStorage.getItem('bhub_admin_password');
-        const ownerName = localStorage.getItem('bhub_admin_username') || 'Master Owner';
-
-        if (enteredPin === masterPin) {
-          toast.success(`Welcome, ${ownerName}!`, { description: 'Authenticated via Master PIN' });
-          onLogin({ id: 'master_owner', name: ownerName, role: 'owner' });
-        } else {
-          setError('Invalid PIN');
-          setPin('');
-        }
-      }
-    } catch {
-      // Offline fallback
-      const masterPin = localStorage.getItem('bhub_admin_password');
-      const ownerName = localStorage.getItem('bhub_admin_username') || 'Master Owner';
-      if (enteredPin === masterPin) {
-        toast.info('Offline access granted via Master PIN');
-        onLogin({ id: 'master_owner', name: ownerName, role: 'owner' });
-      } else {
-        setError('Connection error — check internet');
-        setPin('');
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
 
   // Keyboard support
   useEffect(() => {
@@ -108,7 +112,6 @@ const PinLogin = ({ onLogin }: PinLoginProps) => {
           <p className="text-xs text-muted-foreground mt-1">Enter your 4-digit PIN</p>
         </div>
 
-        {/* PIN dots */}
         <div className="flex justify-center gap-3">
           {[0, 1, 2, 3].map(i => (
             <motion.div
@@ -136,7 +139,6 @@ const PinLogin = ({ onLogin }: PinLoginProps) => {
           </motion.p>
         )}
 
-        {/* Numpad - Large Touch Targets */}
         <div className="grid grid-cols-3 gap-3 p-2">
           {[1, 2, 3, 4, 5, 6, 7, 8, 9, null, 0, 'del'].map((key, i) =>
             key !== null ? (

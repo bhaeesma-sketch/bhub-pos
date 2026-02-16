@@ -74,11 +74,13 @@ export const OnboardingFlow: React.FC<OnboardingProps> = ({ onComplete }) => {
             localStorage.setItem('bhub_store_name', storeData.storeName);
             localStorage.setItem('bhub_vat_number', vatData.vatin);
             localStorage.setItem('bhub_store_id', storeId);
+            localStorage.setItem('bhub_admin_password', userData.password);
+            localStorage.setItem('bhub_admin_username', userData.name);
 
             // 2. Seed the staff table with the owner record
             const { error: staffError } = await supabase.from('staff').insert({
                 name: userData.name,
-                pin: '1234', // Dukkantek default owner PIN
+                pin: userData.password,
                 role: 'owner',
                 is_active: true
             });
@@ -88,11 +90,11 @@ export const OnboardingFlow: React.FC<OnboardingProps> = ({ onComplete }) => {
                 toast.warning('Offline Mode Active. Cloud sync pending.');
             } else {
                 toast.success(`Business Registered: ${storeData.storeName}`, {
-                    description: 'Owner PIN is 1234. Store ID saved.',
+                    description: `Owner PIN is ${userData.password}. Store ID saved.`,
                 });
             }
 
-            onComplete(config, '1234');
+            onComplete(config, userData.password);
         } catch (error: any) {
             console.error('Onboarding finalize error:', error);
             toast.error('Registration failed: ' + (error.message || 'Unknown error'));
