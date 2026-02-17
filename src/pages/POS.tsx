@@ -866,11 +866,11 @@ const POS = () => {
           )}
         </AnimatePresence>
 
-        <div className="flex flex-col lg:flex-row flex-1 overflow-hidden">
+        <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
           {/* Main Content Area */}
           <div className={cn(
             "flex-1 flex flex-col min-w-0 bg-[#0F172A] transition-all duration-300",
-            mobileCartOpen ? "hidden lg:flex" : "flex"
+            mobileCartOpen ? "hidden md:flex" : "flex"
           )}>
             {/* Search Bar */}
             <div className="p-2 sm:p-4 border-b border-border/50 glass-strong">
@@ -916,7 +916,7 @@ const POS = () => {
                 <button
                   onClick={() => setMobileCartOpen(true)}
                   className={cn(
-                    "lg:hidden flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-[0.1em] transition-all active:scale-95 border-2",
+                    "md:hidden flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-[0.1em] transition-all active:scale-95 border-2",
                     cart.length > 0
                       ? "bg-gold text-black border-white/40 shadow-[0_0_20px_rgba(212,175,55,0.4)] animate-pulse"
                       : "glass text-muted-foreground border-border/50"
@@ -924,7 +924,7 @@ const POS = () => {
                   title="Open Cart"
                 >
                   <ShoppingCart className="w-4 h-4" />
-                  <span>View Cart ({cart.reduce((a, b) => a + b.quantity, 0)})</span>
+                  <span>Cart ({cart.reduce((a, b) => a + b.quantity, 0)})</span>
                 </button>
                 <div className={cn("hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-lg glass text-xs font-medium", online ? 'text-success' : 'text-warning')}>
                   {online ? <Wifi className="w-3.5 h-3.5" /> : <WifiOff className="w-3.5 h-3.5" />}
@@ -1072,12 +1072,12 @@ const POS = () => {
               )}
             </AnimatePresence>
 
-            {/* Right: Cart (Permanent Sidebar on Desktop, Toggle Overlay on Mobile) */}
+            {/* Right: Cart (Permanent Sidebar on Desktop/Tablet, Toggle Overlay on Mobile) */}
             <div className={cn(
               "border-l border-sidebar-border/50 bg-[#0B1120] flex flex-col transition-all duration-300 relative",
               mobileCartOpen
                 ? "fixed inset-0 z-50 w-full"
-                : "hidden lg:flex lg:w-[420px] lg:static flex-none"
+                : "hidden md:flex md:w-[360px] lg:w-[420px] md:static flex-none"
             )}>
               {/* Cart Header */}
               <div className="p-4 border-b border-sidebar-border/30 bg-[#1E293B]">
@@ -1087,7 +1087,7 @@ const POS = () => {
                     {mobileCartOpen && (
                       <button
                         onClick={() => setMobileCartOpen(false)}
-                        className="lg:hidden p-1 px-3 rounded-lg text-xs font-black bg-white/10 text-white hover:bg-white/20 transition-all uppercase"
+                        className="md:hidden p-1 px-3 rounded-lg text-xs font-black bg-white/10 text-white hover:bg-white/20 transition-all uppercase"
                       >
                         Back
                       </button>
