@@ -276,10 +276,7 @@ const POS = () => {
     setCart(prev => {
       const existing = prev.find(item => item.product.id === product.id);
       if (existing) {
-        if (existing.quantity >= product.stock) {
-          toast.error('Not enough stock');
-          return prev;
-        }
+        // Stock check removed to allow overselling
         return prev.map(item => item.product.id === product.id ? { ...item, quantity: item.quantity + 1 } : item);
       }
       return [...prev, { product, quantity: 1, discount: 0 }];
@@ -490,7 +487,7 @@ const POS = () => {
     if (qty <= 0) return;
     setCart(prev => prev.map(item => {
       if (item.product.id !== productId) return item;
-      if (qty > item.product.stock) { toast.error('Not enough stock'); return item; }
+      // Stock check removed
       return { ...item, quantity: qty };
     }));
   }, []);
@@ -500,7 +497,7 @@ const POS = () => {
       if (item.product.id === productId) {
         const newQty = item.quantity + delta;
         if (newQty <= 0) return item;
-        if (newQty > item.product.stock) { toast.error('Not enough stock'); return item; }
+        // Stock check removed
         return { ...item, quantity: newQty };
       }
       return item;
