@@ -866,12 +866,9 @@ const POS = () => {
           )}
         </AnimatePresence>
 
-        <div className="flex flex-col md:flex-row flex-1 overflow-hidden h-full relative">
+        <div className="flex flex-row flex-1 overflow-hidden h-full relative">
           {/* Main Product Management Area (Dukkantek Style) */}
-          <div className={cn(
-            "flex-1 flex flex-col min-w-0 bg-[#0F172A] transition-all duration-300 relative",
-            mobileCartOpen ? "hidden md:flex" : "flex"
-          )}>
+          <div className="flex-1 flex flex-col min-w-0 bg-[#0F172A] transition-all duration-300 relative">
             {/* Search Bar */}
             <div className="p-2 sm:p-4 border-b border-border/50 glass-strong">
               <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
@@ -913,19 +910,7 @@ const POS = () => {
                 >
                   <Plus className="w-4 h-4" />
                 </button>
-                <button
-                  onClick={() => setMobileCartOpen(true)}
-                  className={cn(
-                    "md:hidden flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-[0.1em] transition-all active:scale-95 border-2",
-                    cart.length > 0
-                      ? "bg-gold text-black border-white/40 shadow-[0_0_20px_rgba(212,175,55,0.4)] animate-pulse"
-                      : "glass text-muted-foreground border-border/50"
-                  )}
-                  title="Open Checkout"
-                >
-                  <ShoppingCart className="w-4 h-4" />
-                  <span>Cart ({cart.reduce((a, b) => a + b.quantity, 0)})</span>
-                </button>
+                {/* Checkout Toggle Removed - Sidebar is now Permanent */}
                 <div className={cn("hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-lg glass text-xs font-medium", online ? 'text-success' : 'text-warning')}>
                   {online ? <Wifi className="w-3.5 h-3.5" /> : <WifiOff className="w-3.5 h-3.5" />}
                   {online ? 'Online' : 'Offline'}
@@ -1073,25 +1058,14 @@ const POS = () => {
             </AnimatePresence>
 
             {/* Right Side: Dukkantek-Style Permanent Billing Sidebar */}
-            <div className={cn(
-              "border-l border-sidebar-border/50 bg-[#0B1120] flex flex-col transition-all duration-300 relative",
-              mobileCartOpen
-                ? "fixed inset-0 z-50 w-full"
-                : "hidden md:flex md:w-[400px] lg:w-[450px] md:static flex-none shadow-[-10px_0_30px_rgba(0,0,0,0.3)]"
-            )}>
+            {/* Right Side: Dukkantek-Style Permanent Billing Sidebar */}
+            <div className="w-[360px] lg:w-[450px] flex-none border-l border-sidebar-border/50 bg-[#0B1120] flex flex-col items-stretch relative shadow-[-20px_0_40px_rgba(0,0,0,0.5)] z-10 transition-all duration-300">
               {/* Cart Header */}
               <div className="p-4 border-b border-sidebar-border/30 bg-[#1E293B]">
                 <div className="flex items-center justify-between">
                   <h2 className="text-sm font-black text-foreground uppercase tracking-wider">Current Sale</h2>
                   <div className="flex items-center gap-2">
-                    {mobileCartOpen && (
-                      <button
-                        onClick={() => setMobileCartOpen(false)}
-                        className="md:hidden p-2 px-4 rounded-xl text-xs font-black bg-white/10 text-white hover:bg-white/20 transition-all uppercase"
-                      >
-                        ← Back to Items
-                      </button>
-                    )}
+                    {/* Navigation buttons removed for side-by-side view */}
                     <button onClick={clearCart} className="p-1 px-2 rounded-lg text-[10px] font-black text-muted-foreground hover:text-destructive hover:bg-destructive/10 uppercase">Clear</button>
                   </div>
                 </div>
