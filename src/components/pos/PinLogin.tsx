@@ -33,6 +33,8 @@ const PinLogin = ({ onLogin }: PinLoginProps) => {
         .select('id, name, role')
         .eq('pin', cleanPin)
         .eq('is_active', true)
+        .order('created_at', { ascending: false })
+        .limit(1)
         .maybeSingle();
 
       if (data) {

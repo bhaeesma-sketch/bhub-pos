@@ -203,15 +203,21 @@ export const OnboardingFlow: React.FC<OnboardingProps> = ({ onComplete }) => {
                                         </div>
                                     </div>
                                     <div className="space-y-1.5">
-                                        <Label htmlFor="password" className="text-[10px] font-black uppercase text-muted-foreground tracking-widest px-1">Master PIN Code</Label>
+                                        <Label htmlFor="password" className="text-[10px] font-black uppercase text-muted-foreground tracking-widest px-1">4-Digit Master PIN</Label>
                                         <div className="relative">
                                             <Input
                                                 id="password"
-                                                type="password"
-                                                className="h-12 rounded-xl glass border-border/40 px-4 font-semibold tracking-widest"
-                                                placeholder="••••••••"
+                                                type="text"
+                                                inputMode="numeric"
+                                                pattern="[0-9]*"
+                                                maxLength={4}
+                                                className="h-12 rounded-xl glass border-border/40 px-4 font-semibold tracking-widest text-center text-lg"
+                                                placeholder="••••"
                                                 value={userData.password}
-                                                onChange={e => setUserData({ ...userData, password: e.target.value })}
+                                                onChange={e => {
+                                                    const val = e.target.value.replace(/[^0-9]/g, '').slice(0, 4);
+                                                    setUserData({ ...userData, password: val });
+                                                }}
                                             />
                                         </div>
                                     </div>
