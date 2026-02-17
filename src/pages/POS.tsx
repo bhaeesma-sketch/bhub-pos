@@ -866,9 +866,12 @@ const POS = () => {
           )}
         </AnimatePresence>
 
-        <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
-          {/* Left: Products */}
-          <div className={cn("flex-1 flex flex-col min-w-0", showKhat && "hidden lg:flex", mobileCartOpen ? "hidden md:flex" : "flex")}>
+        <div className="flex flex-col lg:flex-row flex-1 overflow-hidden">
+          {/* Main Content Area */}
+          <div className={cn(
+            "flex-1 flex flex-col min-w-0 bg-[#0F172A] transition-all duration-300",
+            mobileCartOpen ? "hidden lg:flex" : "flex"
+          )}>
             {/* Search Bar */}
             <div className="p-2 sm:p-4 border-b border-border/50 glass-strong">
               <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
@@ -913,7 +916,7 @@ const POS = () => {
                 <button
                   onClick={() => setMobileCartOpen(true)}
                   className={cn(
-                    "flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-[0.1em] transition-all active:scale-95 border-2",
+                    "lg:hidden flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-[0.1em] transition-all active:scale-95 border-2",
                     cart.length > 0
                       ? "bg-gold text-black border-white/40 shadow-[0_0_20px_rgba(212,175,55,0.4)] animate-pulse"
                       : "glass text-muted-foreground border-border/50"
@@ -1069,12 +1072,12 @@ const POS = () => {
               )}
             </AnimatePresence>
 
-            {/* Right: Cart (Sidebar on Desktop, Overlay on Mobile) */}
+            {/* Right: Cart (Permanent Sidebar on Desktop, Toggle Overlay on Mobile) */}
             <div className={cn(
-              "border-l border-sidebar-border/50 bg-[#0B1120] flex flex-col transition-all duration-300",
+              "border-l border-sidebar-border/50 bg-[#0B1120] flex flex-col transition-all duration-300 relative",
               mobileCartOpen
-                ? "fixed inset-0 z-50 w-full md:w-[450px] md:left-auto md:right-0 shadow-2xl h-full"
-                : "hidden md:flex md:w-[380px] md:static flex-none"
+                ? "fixed inset-0 z-50 w-full"
+                : "hidden lg:flex lg:w-[420px] lg:static flex-none"
             )}>
               {/* Cart Header */}
               <div className="p-4 border-b border-sidebar-border/30 bg-[#1E293B]">
@@ -1084,9 +1087,9 @@ const POS = () => {
                     {mobileCartOpen && (
                       <button
                         onClick={() => setMobileCartOpen(false)}
-                        className="p-1 px-3 rounded-lg text-xs font-black bg-white/10 text-white hover:bg-white/20 transition-all"
+                        className="lg:hidden p-1 px-3 rounded-lg text-xs font-black bg-white/10 text-white hover:bg-white/20 transition-all uppercase"
                       >
-                        CLOSE
+                        Back
                       </button>
                     )}
                     <button onClick={clearCart} className="p-1 px-2 rounded-lg text-[10px] font-black text-muted-foreground hover:text-destructive hover:bg-destructive/10 uppercase">Clear</button>
