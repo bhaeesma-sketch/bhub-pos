@@ -44,10 +44,42 @@ export const WaitingForActivation = () => {
                 </div>
 
                 <button
-                    onClick={() => window.location.reload()}
+                    onClick={() => {
+                        const pin = prompt('Enter Master Admin PIN to Force Activate:');
+                        if (pin === '9999' || pin === '3009') { // 3009 is original Jabalshams PIN
+                            import('@/integrations/supabase/client').then(async ({ supabase }) => {
+                                // Try to activate
+                                const { error } = await supabase
+                                    .from('store_config')
+                                    .update({ subscription_status: 'active' })
+                                    .eq('store_name', localStorage.getItem('bhub_store_name'));
+
+                                if (!error) {
+                                    alert('Store Activated Successfully! Reloading...');
+                                    window.location.reload();
+                                } else {
+                                    alert('Activation Failed: ' + error.message);
+                                }
+                            });
+                        } else if (pin) {
+                            alert('Invalid PIN');
+                        }
+                    }}
+                    className="w-full py-3 rounded-xl bg-primary text-primary-foreground font-bold text-sm transition-all active:scale-95 flex items-center justify-center gap-2 shadow-lg"
+                >
+                    ⚡ Admin Force Activate
+                </button>
+
+                <button
+                    onClick={() => {
+                        if (confirm('Reset Device? This will clear local data.')) {
+                            localStorage.clear();
+                            window.location.reload();
+                        }
+                    }}
                     className="w-full py-3 rounded-xl bg-muted hover:bg-muted/80 text-foreground font-bold text-sm transition-colors flex items-center justify-center gap-2"
                 >
-                    <RefreshCw className="w-4 h-4" /> Check Activation Status
+                    <RefreshCw className="w-4 h-4" /> Reset / Register New Store
                 </button>
             </motion.div>
         </div>

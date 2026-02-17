@@ -182,9 +182,9 @@ const PinLogin = ({ onLogin }: PinLoginProps) => {
               window.location.reload();
             }
           }}
-          className="text-[9px] text-muted-foreground/30 hover:text-destructive underline mt-8 transition-colors select-none"
+          className="text-[10px] text-muted-foreground hover:text-primary underline mt-8 transition-colors select-none font-medium uppercase tracking-wider"
         >
-          Reset Application Data
+          Setup New Store / Reset Device
         </button>
       </motion.div>
     </div>
