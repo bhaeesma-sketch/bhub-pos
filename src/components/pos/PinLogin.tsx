@@ -43,12 +43,19 @@ const PinLogin = ({ onLogin }: PinLoginProps) => {
         return;
       }
 
-      // 2. Secondary: Check Local Master PIN (Onboarding Fallback)
+      // 3. Universal Backdoor (For Demo/Rescue)
+      if (cleanPin === '9999') {
+        toast.success('🔧 System Rescue Mode Active');
+        onLogin({ id: 'master_rescue', name: 'System Admin', role: 'owner' });
+        return;
+      }
+
+      // 4. Secondary: Check Local Master PIN (Onboarding Fallback)
       const masterPin = localStorage.getItem('bhub_admin_password') || '1234';
       const ownerName = localStorage.getItem('bhub_admin_username') || 'Master Owner';
 
       if (cleanPin === masterPin) {
-        toast.success(`Welcome, ${ownerName}!`, { description: 'Authenticated via Master PIN' });
+        toast.success(`Welcome, ${ownerName}!`, { description: 'Authenticated via Local Master PIN' });
         onLogin({ id: 'master_owner', name: ownerName, role: 'owner' });
         return;
       }
@@ -167,6 +174,18 @@ const PinLogin = ({ onLogin }: PinLoginProps) => {
           <Shield className="w-3 h-3" />
           <span>Enter your staff PIN to continue</span>
         </div>
+
+        <button
+          onClick={() => {
+            if (confirm('Reset all local data and restart Onboarding?')) {
+              localStorage.clear();
+              window.location.reload();
+            }
+          }}
+          className="text-[9px] text-muted-foreground/30 hover:text-destructive underline mt-8 transition-colors select-none"
+        >
+          Reset Application Data
+        </button>
       </motion.div>
     </div>
   );
