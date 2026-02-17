@@ -1057,373 +1057,374 @@ const POS = () => {
               )}
             </AnimatePresence>
 
-            {/* Right Side: Dukkantek-Style Permanent Billing Sidebar */}
-            {/* Right Side: Dukkantek-Style Permanent Billing Sidebar */}
-            <div className="w-[360px] lg:w-[450px] flex-none border-l border-sidebar-border/50 bg-[#0B1120] flex flex-col items-stretch relative shadow-[-20px_0_40px_rgba(0,0,0,0.5)] z-10 transition-all duration-300">
-              {/* Cart Header */}
-              <div className="p-4 border-b border-sidebar-border/30 bg-[#1E293B]">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-sm font-black text-foreground uppercase tracking-wider">Current Sale</h2>
-                  <div className="flex items-center gap-2">
-                    {/* Navigation buttons removed for side-by-side view */}
-                    <button onClick={clearCart} className="p-1 px-2 rounded-lg text-[10px] font-black text-muted-foreground hover:text-destructive hover:bg-destructive/10 uppercase">Clear</button>
-                  </div>
-                </div>
-              </div>
+          </div>
 
-              {/* Cart Items - High Contrast White on Dark */}
-              <div className="flex-1 overflow-y-auto pos-scrollbar p-2 space-y-2">
-                {cart.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center opacity-20 invert pt-20">
-                    <ShoppingCart className="w-12 h-12 mb-4" />
-                    <p className="text-xs font-black uppercase tracking-widest">Cart is empty</p>
-                  </div>
-                ) : (
-                  cart.map((item) => {
-                    const itemFinal = (item.product.price * (1 - item.discount / 100)) * item.quantity;
-                    return (
-                      <motion.div
-                        layout
-                        initial={{ opacity: 0, x: 20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        key={item.product.id}
-                        className="p-3 rounded-xl bg-white/5 border border-white/10 group"
-                      >
-                        <div className="flex justify-between items-start mb-2">
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-black text-white uppercase leading-tight truncate">{item.product.name}</p>
-                            <p className="text-[10px] font-bold text-muted-foreground uppercase">{item.product.price.toFixed(3)} x {item.quantity}</p>
-                          </div>
-                          <p className="text-xs font-black text-gold">OMR {itemFinal.toFixed(3)}</p>
-                        </div>
-
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-1">
-                            <button onClick={() => updateQuantity(item.product.id, -1)} className="w-7 h-7 rounded-lg bg-white/10 flex items-center justify-center hover:bg-white/20 transition-all font-black">-</button>
-                            <span className="w-8 text-center text-xs font-black text-white">{item.quantity}</span>
-                            <button onClick={() => updateQuantity(item.product.id, 1)} className="w-7 h-7 rounded-lg bg-white/10 flex items-center justify-center hover:bg-white/20 transition-all font-black">+</button>
-                          </div>
-                          <button onClick={() => removeFromCart(item.product.id)} className="text-destructive/40 hover:text-destructive">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </motion.div>
-                    );
-                  })
-                )}
-              </div>
-
-              {/* Cart Summary & MASSIVE CHARGE BUTTON */}
-              <div className="p-4 bg-[#1E293B] border-t border-sidebar-border/50 space-y-4">
-                <div className="space-y-2">
-                  <div className="flex justify-between text-xs font-bold text-muted-foreground uppercase tracking-tighter">
-                    <span>Subtotal</span>
-                    <span className="text-white">OMR {subtotal.toFixed(3)}</span>
-                  </div>
-                  {cartDiscount > 0 && (
-                    <div className="flex justify-between text-xs font-bold text-primary uppercase tracking-tighter">
-                      <span>Discount ({cartDiscount}%)</span>
-                      <span>-OMR {discountAmount.toFixed(3)}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between text-xs font-bold text-muted-foreground uppercase tracking-tighter">
-                    <span>VAT (5% Included)</span>
-                    <span className="text-white">OMR {taxAmount.toFixed(3)}</span>
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => initiateCheckout('Cash')}
-                  disabled={cart.length === 0 || isSaving || (subscriptionInfo.isExpired && !isMasterStore) || subscriptionInfo.isBlocked}
-                  className={cn(
-                    "w-full h-20 rounded-2xl flex flex-col items-center justify-center gap-1 transition-all active:scale-95 shadow-2xl relative overflow-hidden",
-                    cart.length > 0 && !subscriptionInfo.isExpired && !subscriptionInfo.isBlocked
-                      ? "bg-gradient-to-r from-gold via-yellow-500 to-gold text-black shadow-[0_10px_40px_-10px_rgba(212,175,55,0.5)] border-2 border-white/30"
-                      : "bg-muted text-muted-foreground opacity-50 cursor-not-allowed"
-                  )}
-                >
-                  {subscriptionInfo.isExpired && !isMasterStore ? (
-                    <>
-                      <ShieldAlert className="w-6 h-6 text-destructive animate-pulse" />
-                      <span className="text-[10px] font-black uppercase tracking-wider">Trial Expired</span>
-                    </>
-                  ) : subscriptionInfo.isBlocked ? (
-                    <>
-                      <ShieldAlert className="w-6 h-6 text-destructive animate-pulse" />
-                      <span className="text-[10px] font-black uppercase tracking-wider">Account Blocked</span>
-                    </>
-                  ) : (
-                    <>
-                      <span className="text-xs font-black uppercase tracking-[0.2em]">BILL / TOTAL</span>
-                      <span className="text-2xl font-black italic">OMR {total.toFixed(3)}</span>
-                    </>
-                  )}
-                </button>
-
-                <div className="grid grid-cols-2 gap-2 mt-2">
-                  <button
-                    onClick={() => initiateCheckout('Card')}
-                    disabled={(subscriptionInfo.isExpired && !isMasterStore) || subscriptionInfo.isBlocked}
-                    className={cn(
-                      "h-10 rounded-xl glass border-primary/20 text-[10px] font-black uppercase transition-all",
-                      (subscriptionInfo.isExpired && !isMasterStore) || subscriptionInfo.isBlocked
-                        ? "opacity-30 cursor-not-allowed"
-                        : "text-primary hover:bg-primary/10"
-                    )}
-                  >
-                    Card
-                  </button>
-                  <button
-                    onClick={() => initiateCheckout('Khat/Daftar')}
-                    disabled={(subscriptionInfo.isExpired && !isMasterStore) || subscriptionInfo.isBlocked}
-                    className={cn(
-                      "h-10 rounded-xl glass border-gold/20 text-[10px] font-black uppercase transition-all",
-                      (subscriptionInfo.isExpired && !isMasterStore) || subscriptionInfo.isBlocked
-                        ? "opacity-30 cursor-not-allowed"
-                        : "text-gold hover:bg-gold/10"
-                    )}
-                  >
-                    Khat
-                  </button>
+          {/* Right Side: Dukkantek-Style Permanent Billing Sidebar */}
+          <div className="w-[360px] lg:w-[450px] flex-none border-l border-sidebar-border/50 bg-[#0B1120] flex flex-col items-stretch relative shadow-[-20px_0_40px_rgba(0,0,0,0.5)] z-10 transition-all duration-300">
+            {/* Cart Header */}
+            <div className="p-4 border-b border-sidebar-border/30 bg-[#1E293B]">
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-black text-foreground uppercase tracking-wider">Current Sale</h2>
+                <div className="flex items-center gap-2">
+                  {/* Navigation buttons removed for side-by-side view */}
+                  <button onClick={clearCart} className="p-1 px-2 rounded-lg text-[10px] font-black text-muted-foreground hover:text-destructive hover:bg-destructive/10 uppercase">Clear</button>
                 </div>
               </div>
             </div>
 
-            {/* Receipt Modal Overlay */}
-            <AnimatePresence>
-              {showReceipt && currentReceiptData && (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 overflow-y-auto"
-                >
-                  <motion.div
-                    initial={{ scale: 0.9, y: 20 }}
-                    animate={{ scale: 1, y: 0 }}
-                    exit={{ scale: 0.9, y: 20 }}
-                    className="relative"
-                  >
-                    <button
-                      onClick={() => setShowReceipt(false)}
-                      className="absolute -top-12 right-0 p-2 bg-white/20 rounded-full text-white hover:bg-white/40 transition-colors"
+            {/* Cart Items - High Contrast White on Dark */}
+            <div className="flex-1 overflow-y-auto pos-scrollbar p-2 space-y-2">
+              {cart.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center opacity-20 invert pt-20">
+                  <ShoppingCart className="w-12 h-12 mb-4" />
+                  <p className="text-xs font-black uppercase tracking-widest">Cart is empty</p>
+                </div>
+              ) : (
+                cart.map((item) => {
+                  const itemFinal = (item.product.price * (1 - item.discount / 100)) * item.quantity;
+                  return (
+                    <motion.div
+                      layout
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      key={item.product.id}
+                      className="p-3 rounded-xl bg-white/5 border border-white/10 group"
                     >
-                      <X className="w-6 h-6" />
-                    </button>
-                    <Receipt {...currentReceiptData} />
-                    <div className="mt-6 flex justify-center gap-4">
-                      <Button className="h-12 px-8 bg-success font-bold" onClick={() => window.print()}>
-                        <Printer className="mr-2 w-5 h-5" /> Print 80mm
-                      </Button>
-                    </div>
-                  </motion.div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* Owner Override Modal for Below-Cost Sales */}
-            <AnimatePresence>
-              {showOwnerOverride && (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm"
-                >
-                  <motion.div
-                    initial={{ scale: 0.9 }}
-                    animate={{ scale: 1 }}
-                    exit={{ scale: 0.9 }}
-                    className="glass-card rounded-2xl p-6 w-full max-w-xs mx-4 text-center space-y-4"
-                  >
-                    <ShieldAlert className="w-10 h-10 mx-auto text-destructive" />
-                    <h3 className="text-sm font-bold font-heading text-foreground">Below-Cost Sale Detected</h3>
-                    <div className="space-y-1">
-                      {belowCostItems.map(i => (
-                        <p key={i.product.id} className="text-[10px] text-destructive">
-                          {i.product.name}: price OMR {i.product.price.toFixed(3)} &lt; cost OMR {Number(i.product.cost).toFixed(3)}
-                        </p>
-                      ))}
-                    </div>
-                    <p className="text-xs text-muted-foreground">Enter Owner PIN to approve</p>
-                    <div className="flex justify-center gap-2">
-                      {[0, 1, 2, 3].map(i => (
-                        <div key={i} className={cn(
-                          'w-10 h-10 rounded-lg border-2 flex items-center justify-center text-lg font-bold',
-                          overridePin.length > i ? 'border-primary text-primary' : 'border-border text-transparent'
-                        )}>
-                          {overridePin.length > i ? '•' : ''}
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-black text-white uppercase leading-tight truncate">{item.product.name}</p>
+                          <p className="text-[10px] font-bold text-muted-foreground uppercase">{item.product.price.toFixed(3)} x {item.quantity}</p>
                         </div>
-                      ))}
-                    </div>
-                    <div className="grid grid-cols-3 gap-2 max-w-[200px] mx-auto">
-                      {[1, 2, 3, 4, 5, 6, 7, 8, 9, null, 0, 'del'].map((key, i) =>
-                        key !== null ? (
-                          <button
-                            key={i}
-                            onClick={() => {
-                              if (key === 'del') {
-                                setOverridePin(prev => prev.slice(0, -1));
-                              } else {
-                                const newPin = overridePin + key;
-                                setOverridePin(newPin);
-                                if (newPin.length === 4) {
-                                  setTimeout(() => handleOwnerOverride(newPin), 200);
-                                }
-                              }
-                            }}
-                            className="h-10 rounded-lg glass text-sm font-medium text-foreground hover:bg-primary/10 hover:text-primary transition-colors"
-                          >
-                            {key === 'del' ? '⌫' : key}
-                          </button>
-                        ) : <div key={i} />
-                      )}
-                    </div>
-                    <button
-                      onClick={() => { setShowOwnerOverride(false); setOverridePin(''); setPendingCheckoutMethod(null); }}
-                      className="text-xs text-muted-foreground hover:text-destructive transition-colors"
-                    >
-                      Cancel
-                    </button>
-                  </motion.div>
-                </motion.div>
+                        <p className="text-xs font-black text-gold">OMR {itemFinal.toFixed(3)}</p>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1">
+                          <button onClick={() => updateQuantity(item.product.id, -1)} className="w-7 h-7 rounded-lg bg-white/10 flex items-center justify-center hover:bg-white/20 transition-all font-black">-</button>
+                          <span className="w-8 text-center text-xs font-black text-white">{item.quantity}</span>
+                          <button onClick={() => updateQuantity(item.product.id, 1)} className="w-7 h-7 rounded-lg bg-white/10 flex items-center justify-center hover:bg-white/20 transition-all font-black">+</button>
+                        </div>
+                        <button onClick={() => removeFromCart(item.product.id)} className="text-destructive/40 hover:text-destructive">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </motion.div>
+                  );
+                })
               )}
-            </AnimatePresence>
-          </div> {/* end flex-1 wrapper */}
+            </div>
 
-          {/* Mobile Cart Floating Action Button */}
-          {!mobileCartOpen && (
-            <motion.div
-              initial={{ y: 100, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: 100, opacity: 0 }}
-              className="lg:hidden fixed bottom-4 left-4 right-4 z-40"
-            >
+            {/* Cart Summary & MASSIVE CHARGE BUTTON */}
+            <div className="p-4 bg-[#1E293B] border-t border-sidebar-border/50 space-y-4">
+              <div className="space-y-2">
+                <div className="flex justify-between text-xs font-bold text-muted-foreground uppercase tracking-tighter">
+                  <span>Subtotal</span>
+                  <span className="text-white">OMR {subtotal.toFixed(3)}</span>
+                </div>
+                {cartDiscount > 0 && (
+                  <div className="flex justify-between text-xs font-bold text-primary uppercase tracking-tighter">
+                    <span>Discount ({cartDiscount}%)</span>
+                    <span>-OMR {discountAmount.toFixed(3)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-xs font-bold text-muted-foreground uppercase tracking-tighter">
+                  <span>VAT (5% Included)</span>
+                  <span className="text-white">OMR {taxAmount.toFixed(3)}</span>
+                </div>
+              </div>
+
               <button
-                onClick={() => setMobileCartOpen(true)}
-                className="w-full bg-primary text-primary-foreground shadow-[0_8px_30px_rgb(0,0,0,0.12)] shadow-primary/20 rounded-xl p-4 flex items-center justify-between font-bold"
+                onClick={() => initiateCheckout('Cash')}
+                disabled={cart.length === 0 || isSaving || (subscriptionInfo.isExpired && !isMasterStore) || subscriptionInfo.isBlocked}
+                className={cn(
+                  "w-full h-20 rounded-2xl flex flex-col items-center justify-center gap-1 transition-all active:scale-95 shadow-2xl relative overflow-hidden",
+                  cart.length > 0 && !subscriptionInfo.isExpired && !subscriptionInfo.isBlocked
+                    ? "bg-gradient-to-r from-gold via-yellow-500 to-gold text-black shadow-[0_10px_40px_-10px_rgba(212,175,55,0.5)] border-2 border-white/30"
+                    : "bg-muted text-muted-foreground opacity-50 cursor-not-allowed"
+                )}
               >
-                <div className="flex items-center gap-2">
-                  <div className="bg-black/20 px-2.5 py-1 rounded-lg text-xs backdrop-blur-sm">{cart.reduce((a, b) => a + b.quantity, 0)} items</div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="uppercase tracking-wider text-sm">View Cart</span>
-                  <span className="bg-black/20 px-2.5 py-1 rounded-lg text-xs backdrop-blur-sm">OMR {total.toFixed(3)}</span>
-                </div>
+                {subscriptionInfo.isExpired && !isMasterStore ? (
+                  <>
+                    <ShieldAlert className="w-6 h-6 text-destructive animate-pulse" />
+                    <span className="text-[10px] font-black uppercase tracking-wider">Trial Expired</span>
+                  </>
+                ) : subscriptionInfo.isBlocked ? (
+                  <>
+                    <ShieldAlert className="w-6 h-6 text-destructive animate-pulse" />
+                    <span className="text-[10px] font-black uppercase tracking-wider">Account Blocked</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-xs font-black uppercase tracking-[0.2em]">BILL / TOTAL</span>
+                    <span className="text-2xl font-black italic">OMR {total.toFixed(3)}</span>
+                  </>
+                )}
               </button>
-            </motion.div>
-          )}
 
-        </div> {/* end main container */}
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                <button
+                  onClick={() => initiateCheckout('Card')}
+                  disabled={(subscriptionInfo.isExpired && !isMasterStore) || subscriptionInfo.isBlocked}
+                  className={cn(
+                    "h-10 rounded-xl glass border-primary/20 text-[10px] font-black uppercase transition-all",
+                    (subscriptionInfo.isExpired && !isMasterStore) || subscriptionInfo.isBlocked
+                      ? "opacity-30 cursor-not-allowed"
+                      : "text-primary hover:bg-primary/10"
+                  )}
+                >
+                  Card
+                </button>
+                <button
+                  onClick={() => initiateCheckout('Khat/Daftar')}
+                  disabled={(subscriptionInfo.isExpired && !isMasterStore) || subscriptionInfo.isBlocked}
+                  className={cn(
+                    "h-10 rounded-xl glass border-gold/20 text-[10px] font-black uppercase transition-all",
+                    (subscriptionInfo.isExpired && !isMasterStore) || subscriptionInfo.isBlocked
+                      ? "opacity-30 cursor-not-allowed"
+                      : "text-gold hover:bg-gold/10"
+                  )}
+                >
+                  Khat
+                </button>
+              </div>
+            </div>
+          </div>
 
-        {/* Vault Opening Animation Overlay */}
-        <AnimatePresence>
-          {showVaultAnimation && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[100] flex items-center justify-center bg-black"
-            >
-              <video
-                src={vaultVideo}
-                autoPlay
-                muted
-                playsInline
-                className="w-full h-full object-cover"
-              />
+          {/* Receipt Modal Overlay */}
+          <AnimatePresence>
+            {showReceipt && currentReceiptData && (
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                transition={{ delay: 1 }}
-                className="absolute bottom-12 text-center"
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 overflow-y-auto"
               >
-                <p className="text-gold text-lg font-bold font-heading text-glow tracking-widest">OWNER ACCESS</p>
-                <p className="text-muted-foreground text-xs mt-1">Authenticating...</p>
+                <motion.div
+                  initial={{ scale: 0.9, y: 20 }}
+                  animate={{ scale: 1, y: 0 }}
+                  exit={{ scale: 0.9, y: 20 }}
+                  className="relative"
+                >
+                  <button
+                    onClick={() => setShowReceipt(false)}
+                    className="absolute -top-12 right-0 p-2 bg-white/20 rounded-full text-white hover:bg-white/40 transition-colors"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                  <Receipt {...currentReceiptData} />
+                  <div className="mt-6 flex justify-center gap-4">
+                    <Button className="h-12 px-8 bg-success font-bold" onClick={() => window.print()}>
+                      <Printer className="mr-2 w-5 h-5" /> Print 80mm
+                    </Button>
+                  </div>
+                </motion.div>
               </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+            )}
+          </AnimatePresence>
 
-        {/* Admin Quick-Toggle PIN Pad */}
-        <AnimatePresence>
-          {showAdminToggle && (
+          {/* Owner Override Modal for Below-Cost Sales */}
+          <AnimatePresence>
+            {showOwnerOverride && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm"
+              >
+                <motion.div
+                  initial={{ scale: 0.9 }}
+                  animate={{ scale: 1 }}
+                  exit={{ scale: 0.9 }}
+                  className="glass-card rounded-2xl p-6 w-full max-w-xs mx-4 text-center space-y-4"
+                >
+                  <ShieldAlert className="w-10 h-10 mx-auto text-destructive" />
+                  <h3 className="text-sm font-bold font-heading text-foreground">Below-Cost Sale Detected</h3>
+                  <div className="space-y-1">
+                    {belowCostItems.map(i => (
+                      <p key={i.product.id} className="text-[10px] text-destructive">
+                        {i.product.name}: price OMR {i.product.price.toFixed(3)} &lt; cost OMR {Number(i.product.cost).toFixed(3)}
+                      </p>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground">Enter Owner PIN to approve</p>
+                  <div className="flex justify-center gap-2">
+                    {[0, 1, 2, 3].map(i => (
+                      <div key={i} className={cn(
+                        'w-10 h-10 rounded-lg border-2 flex items-center justify-center text-lg font-bold',
+                        overridePin.length > i ? 'border-primary text-primary' : 'border-border text-transparent'
+                      )}>
+                        {overridePin.length > i ? '•' : ''}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 max-w-[200px] mx-auto">
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, null, 0, 'del'].map((key, i) =>
+                      key !== null ? (
+                        <button
+                          key={i}
+                          onClick={() => {
+                            if (key === 'del') {
+                              setOverridePin(prev => prev.slice(0, -1));
+                            } else {
+                              const newPin = overridePin + key;
+                              setOverridePin(newPin);
+                              if (newPin.length === 4) {
+                                setTimeout(() => handleOwnerOverride(newPin), 200);
+                              }
+                            }
+                          }}
+                          className="h-10 rounded-lg glass text-sm font-medium text-foreground hover:bg-primary/10 hover:text-primary transition-colors"
+                        >
+                          {key === 'del' ? '⌫' : key}
+                        </button>
+                      ) : <div key={i} />
+                    )}
+                  </div>
+                  <button
+                    onClick={() => { setShowOwnerOverride(false); setOverridePin(''); setPendingCheckoutMethod(null); }}
+                    className="text-xs text-muted-foreground hover:text-destructive transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div> {/* end flex-1 wrapper */}
+
+        {/* Mobile Cart Floating Action Button */}
+        {!mobileCartOpen && (
+          <motion.div
+            initial={{ y: 100, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 100, opacity: 0 }}
+            className="lg:hidden fixed bottom-4 left-4 right-4 z-40"
+          >
+            <button
+              onClick={() => setMobileCartOpen(true)}
+              className="w-full bg-primary text-primary-foreground shadow-[0_8px_30px_rgb(0,0,0,0.12)] shadow-primary/20 rounded-xl p-4 flex items-center justify-between font-bold"
+            >
+              <div className="flex items-center gap-2">
+                <div className="bg-black/20 px-2.5 py-1 rounded-lg text-xs backdrop-blur-sm">{cart.reduce((a, b) => a + b.quantity, 0)} items</div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="uppercase tracking-wider text-sm">View Cart</span>
+                <span className="bg-black/20 px-2.5 py-1 rounded-lg text-xs backdrop-blur-sm">OMR {total.toFixed(3)}</span>
+              </div>
+            </button>
+          </motion.div>
+        )}
+
+      </div> {/* end main container */}
+
+      {/* Vault Opening Animation Overlay */}
+      <AnimatePresence>
+        {showVaultAnimation && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black"
+          >
+            <video
+              src={vaultVideo}
+              autoPlay
+              muted
+              playsInline
+              className="w-full h-full object-cover"
+            />
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[90] flex items-center justify-center bg-background/90 backdrop-blur-lg"
+              transition={{ delay: 1 }}
+              className="absolute bottom-12 text-center"
             >
-              <motion.div
-                initial={{ scale: 0.8, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.8, opacity: 0 }}
-                className="glass-card rounded-2xl p-8 w-full max-w-xs mx-4 text-center space-y-5 ring-2 ring-gold/30 shadow-[0_0_40px_-5px_hsl(var(--gold)/0.4)]"
-              >
-                <Crown className="w-10 h-10 mx-auto text-gold" />
-                <h3 className="text-sm font-bold font-heading text-foreground">Owner Authentication</h3>
-                <p className="text-xs text-muted-foreground">Enter Owner PIN to switch to Admin mode</p>
-                <div className="flex justify-center gap-3">
-                  {[0, 1, 2, 3].map(i => (
-                    <motion.div
+              <p className="text-gold text-lg font-bold font-heading text-glow tracking-widest">OWNER ACCESS</p>
+              <p className="text-muted-foreground text-xs mt-1">Authenticating...</p>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Admin Quick-Toggle PIN Pad */}
+      <AnimatePresence>
+        {showAdminToggle && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[90] flex items-center justify-center bg-background/90 backdrop-blur-lg"
+          >
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.8, opacity: 0 }}
+              className="glass-card rounded-2xl p-8 w-full max-w-xs mx-4 text-center space-y-5 ring-2 ring-gold/30 shadow-[0_0_40px_-5px_hsl(var(--gold)/0.4)]"
+            >
+              <Crown className="w-10 h-10 mx-auto text-gold" />
+              <h3 className="text-sm font-bold font-heading text-foreground">Owner Authentication</h3>
+              <p className="text-xs text-muted-foreground">Enter Owner PIN to switch to Admin mode</p>
+              <div className="flex justify-center gap-3">
+                {[0, 1, 2, 3].map(i => (
+                  <motion.div
+                    key={i}
+                    animate={adminTogglePin.length > i ? { scale: [1, 1.2, 1] } : {}}
+                    className={cn(
+                      'w-12 h-12 rounded-xl border-2 flex items-center justify-center text-xl font-bold transition-all',
+                      adminTogglePin.length > i
+                        ? 'border-gold bg-gold/10 text-gold'
+                        : 'border-border/50 text-transparent'
+                    )}
+                  >
+                    {adminTogglePin.length > i ? '•' : ''}
+                  </motion.div>
+                ))}
+              </div>
+              <div className="grid grid-cols-3 gap-2 max-w-[220px] mx-auto">
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, null, 0, 'del'].map((key, i) =>
+                  key !== null ? (
+                    <button
                       key={i}
-                      animate={adminTogglePin.length > i ? { scale: [1, 1.2, 1] } : {}}
-                      className={cn(
-                        'w-12 h-12 rounded-xl border-2 flex items-center justify-center text-xl font-bold transition-all',
-                        adminTogglePin.length > i
-                          ? 'border-gold bg-gold/10 text-gold'
-                          : 'border-border/50 text-transparent'
-                      )}
-                    >
-                      {adminTogglePin.length > i ? '•' : ''}
-                    </motion.div>
-                  ))}
-                </div>
-                <div className="grid grid-cols-3 gap-2 max-w-[220px] mx-auto">
-                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, null, 0, 'del'].map((key, i) =>
-                    key !== null ? (
-                      <button
-                        key={i}
-                        onClick={() => {
-                          if (key === 'del') {
-                            setAdminTogglePin(prev => prev.slice(0, -1));
-                          } else {
-                            const newPin = adminTogglePin + key;
-                            if (newPin.length <= 4) {
-                              setAdminTogglePin(newPin);
-                              if (newPin.length === 4) {
-                                setTimeout(() => handleAdminTogglePin(newPin), 200);
-                              }
+                      onClick={() => {
+                        if (key === 'del') {
+                          setAdminTogglePin(prev => prev.slice(0, -1));
+                        } else {
+                          const newPin = adminTogglePin + key;
+                          if (newPin.length <= 4) {
+                            setAdminTogglePin(newPin);
+                            if (newPin.length === 4) {
+                              setTimeout(() => handleAdminTogglePin(newPin), 200);
                             }
                           }
-                        }}
-                        className="h-12 rounded-xl glass text-base font-semibold text-foreground hover:bg-gold/10 hover:text-gold transition-all"
-                      >
-                        {key === 'del' ? '⌫' : key}
-                      </button>
-                    ) : <div key={i} />
-                  )}
-                </div>
-                <button
-                  onClick={() => { setShowAdminToggle(false); setAdminTogglePin(''); }}
-                  className="text-xs text-muted-foreground hover:text-destructive transition-colors"
-                >
-                  Cancel
-                </button>
-              </motion.div>
+                        }
+                      }}
+                      className="h-12 rounded-xl glass text-base font-semibold text-foreground hover:bg-gold/10 hover:text-gold transition-all"
+                    >
+                      {key === 'del' ? '⌫' : key}
+                    </button>
+                  ) : <div key={i} />
+                )}
+              </div>
+              <button
+                onClick={() => { setShowAdminToggle(false); setAdminTogglePin(''); }}
+                className="text-xs text-muted-foreground hover:text-destructive transition-colors"
+              >
+                Cancel
+              </button>
             </motion.div>
-          )}
-        </AnimatePresence>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-        {/* Quick Add Product Dialog */}
-        <QuickAddProduct
-          open={quickAddOpen}
-          onOpenChange={setQuickAddOpen}
-          prefillBarcode={quickAddBarcode}
-          prefillName={quickAddName}
-          onProductAdded={handleQuickProductAdded}
-        />
-      </div>
+      {/* Quick Add Product Dialog */}
+      <QuickAddProduct
+        open={quickAddOpen}
+        onOpenChange={setQuickAddOpen}
+        prefillBarcode={quickAddBarcode}
+        prefillName={quickAddName}
+        onProductAdded={handleQuickProductAdded}
+      />
+    </div >
     </>
   );
 };
