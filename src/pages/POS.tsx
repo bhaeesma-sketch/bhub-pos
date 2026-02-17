@@ -1059,8 +1059,8 @@ const POS = () => {
 
           </div>
 
-          {/* Right Side: Dukkantek-Style Permanent Billing Sidebar */}
-          <div className="w-[360px] lg:w-[450px] flex-none border-l border-sidebar-border/50 bg-[#0B1120] flex flex-col items-stretch relative shadow-[-20px_0_40px_rgba(0,0,0,0.5)] z-10 transition-all duration-300">
+          {/* Cart Sidebar */}
+          <div className="w-[380px] lg:w-[450px] flex-none border-l border-sidebar-border/50 bg-[#0B1120] flex flex-col items-stretch relative shadow-[-20px_0_40px_rgba(0,0,0,0.5)] z-10">
             {/* Cart Header */}
             <div className="p-4 border-b border-sidebar-border/30 bg-[#1E293B]">
               <div className="flex items-center justify-between">
@@ -1416,7 +1416,6 @@ const POS = () => {
         )}
       </AnimatePresence>
 
-      {/* Quick Add Product Dialog */}
       <QuickAddProduct
         open={quickAddOpen}
         onOpenChange={setQuickAddOpen}
@@ -1424,7 +1423,6 @@ const POS = () => {
         prefillName={quickAddName}
         onProductAdded={handleQuickProductAdded}
       />
-    </div >
     </>
   );
 };
