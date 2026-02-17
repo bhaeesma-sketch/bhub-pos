@@ -4,32 +4,74 @@ import type { Tables, TablesInsert } from '@/integrations/supabase/types';
 
 // ========== PRODUCTS ==========
 // Fetches ALL products by paginating in chunks (Supabase defaults to 1000 rows)
+import { offlineDb } from '@/lib/offlineDb';
+
+// ========== PRODUCTS ==========
+// Fetches ALL products from Supabase
 async function fetchAllProducts() {
   const PAGE_SIZE = 1000;
   let allProducts: Tables<'products'>[] = [];
   let from = 0;
   let hasMore = true;
 
-  while (hasMore) {
-    const { data, error } = await supabase
-      .from('products')
-      .select('*')
-      .order('name')
-      .range(from, from + PAGE_SIZE - 1);
-    if (error) throw error;
-    allProducts = allProducts.concat(data);
-    hasMore = data.length === PAGE_SIZE;
-    from += PAGE_SIZE;
-  }
+  try {
+    while (hasMore) {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .order('name')
+        .range(from, from + PAGE_SIZE - 1);
 
-  return allProducts;
+      if (error) throw error;
+
+      if (data) {
+        allProducts = allProducts.concat(data);
+        hasMore = data.length === PAGE_SIZE;
+        from += PAGE_SIZE;
+      } else {
+        hasMore = false;
+      }
+    }
+    return allProducts;
+  } catch (error) {
+    console.error('Fetch products failed:', error);
+    throw error;
+  }
 }
 
 export function useProducts() {
+  const queryClient = useQueryClient();
+
+  // 1. Background Sync (Network -> IDB)
+  useQuery({
+    queryKey: ['products', 'sync'],
+    queryFn: async () => {
+      console.log('🔄 Syncing products from cloud...');
+      const data = await fetchAllProducts();
+      await offlineDb.saveProducts(data);
+      console.log(`✅ Synced ${data.length} products to local DB`);
+      // Invalidating local query triggers UI update
+      queryClient.invalidateQueries({ queryKey: ['products', 'local'] });
+      return data;
+    },
+    staleTime: 5 * 60 * 1000, // Sync every 5 minutes
+    refetchOnWindowFocus: false,
+    retry: 1
+  });
+
+  // 2. UI Read (IDB -> UI) - Instant
   return useQuery({
-    queryKey: ['products'],
-    queryFn: fetchAllProducts,
-    staleTime: 5 * 60 * 1000, // cache for 5 min to avoid re-fetching 14k rows
+    queryKey: ['products', 'local'],
+    queryFn: async () => {
+      const dbProducts = await offlineDb.getAllProducts();
+      if (dbProducts.length === 0) {
+        // Fallback for very first load if sync hasn't finished
+        // We return empty and let the sync populate it
+        return [];
+      }
+      return dbProducts;
+    },
+    staleTime: Infinity // Rely on sync to invalidate
   });
 }
 

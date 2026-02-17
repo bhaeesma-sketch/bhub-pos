@@ -1,11 +1,12 @@
 import { openDB, type IDBPDatabase, type DBSchema } from 'idb';
-import { Product, Sale, Customer } from '@/types/bhub';
+import { Sale } from '@/types/bhub'; // Sale structure is complex, keeping local for now or aligning later
 import { cloudSync } from './bhub-cloud-sync';
+import { Tables } from '@/integrations/supabase/types';
 
 interface BHubDB extends DBSchema {
   products: {
     key: string;
-    value: Product;
+    value: Tables<'products'>;
     indexes: { 'by-barcode': string; 'by-name': string };
   };
   sales: {
@@ -15,7 +16,7 @@ interface BHubDB extends DBSchema {
   };
   customers: {
     key: string;
-    value: Customer;
+    value: Tables<'customers'>;
     indexes: { 'by-phone': string };
   };
   khat_ledger: {
@@ -70,7 +71,7 @@ class OfflineDatabase {
   }
 
   // --- Products ---
-  async saveProducts(products: Product[]) {
+  async saveProducts(products: Tables<'products'>[]) {
     const db = await this.dbPromise;
     const tx = db.transaction('products', 'readwrite');
     await Promise.all([
@@ -79,12 +80,12 @@ class OfflineDatabase {
     ]);
   }
 
-  async getProductByBarcode(barcode: string): Promise<Product | undefined> {
+  async getProductByBarcode(barcode: string): Promise<Tables<'products'> | undefined> {
     const db = await this.dbPromise;
     return db.getFromIndex('products', 'by-barcode', barcode);
   }
 
-  async getAllProducts(): Promise<Product[]> {
+  async getAllProducts(): Promise<Tables<'products'>[]> {
     const db = await this.dbPromise;
     return db.getAll('products');
   }
@@ -113,7 +114,7 @@ class OfflineDatabase {
   }
 
   // --- Khat Ledger ---
-  async addCredit(customer: Customer, amount: number, ref: string) {
+  async addCredit(customer: { phone: string; name: string }, amount: number, ref: string) {
     const db = await this.dbPromise;
     const tx = db.transaction('khat_ledger', 'readwrite');
     const store = tx.store;
