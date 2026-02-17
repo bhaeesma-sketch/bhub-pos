@@ -78,7 +78,8 @@ const RootRouter = () => {
   return (
     <Routes>
       <Route element={<AppLayout />}>
-        <Route path="/" element={<Dashboard />} />
+        <Route path="/" element={<Navigate to="/pos" replace />} />
+        <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/pos" element={<POS />} />
         <Route path="/products" element={<Products />} />
         <Route path="/customers" element={<Customers />} />

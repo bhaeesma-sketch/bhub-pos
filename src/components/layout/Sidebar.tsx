@@ -11,7 +11,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Crown,
+  LayoutDashboard,
 } from 'lucide-react';
+
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import logoIcon from '@/assets/logo-icon.png';
@@ -21,6 +23,7 @@ import { useStoreConfig } from '@/hooks/useSupabaseData';
 
 const allMenuItems = [
   { icon: ShoppingCart, label: 'Register', path: '/pos', ownerOnly: false },
+  { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard', ownerOnly: true },
   { icon: Receipt, label: 'Khat', path: '/bhub/khat', ownerOnly: false },
   { icon: Package, label: 'Inventory', path: '/products', ownerOnly: true },
   { icon: ShieldCheck, label: 'Audit', path: '/audit', ownerOnly: true },
