@@ -1114,77 +1114,70 @@ const POS = () => {
               )}
             </div>
 
-            {/* Cart Summary & MASSIVE CHARGE BUTTON */}
-            <div className="p-4 bg-[#1E293B] border-t border-sidebar-border/50 space-y-4">
-              <div className="space-y-2">
-                <div className="flex justify-between text-xs font-bold text-muted-foreground uppercase tracking-tighter">
+            {/* Cart Summary & Dukkantek-Style Payment Grid */}
+            <div className="p-4 bg-[#111827] border-t border-sidebar-border/50 space-y-4">
+              <div className="space-y-1 bg-black/20 p-3 rounded-xl border border-white/5">
+                <div className="flex justify-between text-[10px] font-black text-muted-foreground uppercase tracking-widest">
                   <span>Subtotal</span>
                   <span className="text-white">OMR {subtotal.toFixed(3)}</span>
                 </div>
                 {cartDiscount > 0 && (
-                  <div className="flex justify-between text-xs font-bold text-primary uppercase tracking-tighter">
+                  <div className="flex justify-between text-[10px] font-black text-primary uppercase tracking-widest">
                     <span>Discount ({cartDiscount}%)</span>
                     <span>-OMR {discountAmount.toFixed(3)}</span>
                   </div>
                 )}
-                <div className="flex justify-between text-xs font-bold text-muted-foreground uppercase tracking-tighter">
-                  <span>VAT (5% Included)</span>
+                <div className="flex justify-between text-[10px] font-black text-muted-foreground uppercase tracking-widest">
+                  <span>VAT (5% Inc)</span>
                   <span className="text-white">OMR {taxAmount.toFixed(3)}</span>
+                </div>
+                <div className="mt-2 pt-2 border-t border-white/10 flex justify-between items-end">
+                  <span className="text-[10px] font-black text-gold uppercase tracking-[0.2em]">Total Amount</span>
+                  <span className="text-2xl font-black text-white italic leading-none">OMR {total.toFixed(3)}</span>
                 </div>
               </div>
 
-              <button
-                onClick={() => initiateCheckout('Cash')}
-                disabled={cart.length === 0 || isSaving || (subscriptionInfo.isExpired && !isMasterStore) || subscriptionInfo.isBlocked}
-                className={cn(
-                  "w-full h-20 rounded-2xl flex flex-col items-center justify-center gap-1 transition-all active:scale-95 shadow-2xl relative overflow-hidden",
-                  cart.length > 0 && !subscriptionInfo.isExpired && !subscriptionInfo.isBlocked
-                    ? "bg-gradient-to-r from-gold via-yellow-500 to-gold text-black shadow-[0_10px_40px_-10px_rgba(212,175,55,0.5)] border-2 border-white/30"
-                    : "bg-muted text-muted-foreground opacity-50 cursor-not-allowed"
-                )}
-              >
-                {subscriptionInfo.isExpired && !isMasterStore ? (
-                  <>
-                    <ShieldAlert className="w-6 h-6 text-destructive animate-pulse" />
-                    <span className="text-[10px] font-black uppercase tracking-wider">Trial Expired</span>
-                  </>
-                ) : subscriptionInfo.isBlocked ? (
-                  <>
-                    <ShieldAlert className="w-6 h-6 text-destructive animate-pulse" />
-                    <span className="text-[10px] font-black uppercase tracking-wider">Account Blocked</span>
-                  </>
-                ) : (
-                  <>
-                    <span className="text-xs font-black uppercase tracking-[0.2em]">BILL / TOTAL</span>
-                    <span className="text-2xl font-black italic">OMR {total.toFixed(3)}</span>
-                  </>
-                )}
-              </button>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  onClick={() => initiateCheckout('Cash')}
+                  disabled={cart.length === 0 || isSaving || (subscriptionInfo.isExpired && !isMasterStore) || subscriptionInfo.isBlocked}
+                  className={cn(
+                    "h-24 rounded-xl flex flex-col items-center justify-center gap-2 transition-all active:scale-95 border-b-4",
+                    cart.length > 0 && !subscriptionInfo.isExpired && !subscriptionInfo.isBlocked
+                      ? "bg-success/20 text-success border-success/40 hover:bg-success/30"
+                      : "bg-muted text-muted-foreground opacity-50 cursor-not-allowed border-transparent"
+                  )}
+                >
+                  <Banknote className="w-6 h-6" />
+                  <span className="text-[10px] font-black uppercase tracking-widest">Cash</span>
+                </button>
 
-              <div className="grid grid-cols-2 gap-2 mt-2">
                 <button
                   onClick={() => initiateCheckout('Card')}
-                  disabled={(subscriptionInfo.isExpired && !isMasterStore) || subscriptionInfo.isBlocked}
+                  disabled={cart.length === 0 || isSaving || (subscriptionInfo.isExpired && !isMasterStore) || subscriptionInfo.isBlocked}
                   className={cn(
-                    "h-10 rounded-xl glass border-primary/20 text-[10px] font-black uppercase transition-all",
-                    (subscriptionInfo.isExpired && !isMasterStore) || subscriptionInfo.isBlocked
-                      ? "opacity-30 cursor-not-allowed"
-                      : "text-primary hover:bg-primary/10"
+                    "h-24 rounded-xl flex flex-col items-center justify-center gap-2 transition-all active:scale-95 border-b-4",
+                    cart.length > 0 && !subscriptionInfo.isExpired && !subscriptionInfo.isBlocked
+                      ? "bg-info/20 text-info border-info/40 hover:bg-info/30"
+                      : "bg-muted text-muted-foreground opacity-50 cursor-not-allowed border-transparent"
                   )}
                 >
-                  Card
+                  <CreditCard className="w-6 h-6" />
+                  <span className="text-[10px] font-black uppercase tracking-widest">Card</span>
                 </button>
+
                 <button
                   onClick={() => initiateCheckout('Khat/Daftar')}
-                  disabled={(subscriptionInfo.isExpired && !isMasterStore) || subscriptionInfo.isBlocked}
+                  disabled={cart.length === 0 || isSaving || (subscriptionInfo.isExpired && !isMasterStore) || subscriptionInfo.isBlocked}
                   className={cn(
-                    "h-10 rounded-xl glass border-gold/20 text-[10px] font-black uppercase transition-all",
-                    (subscriptionInfo.isExpired && !isMasterStore) || subscriptionInfo.isBlocked
-                      ? "opacity-30 cursor-not-allowed"
-                      : "text-gold hover:bg-gold/10"
+                    "h-24 rounded-xl flex flex-col items-center justify-center gap-2 transition-all active:scale-95 border-b-4",
+                    cart.length > 0 && !subscriptionInfo.isExpired && !subscriptionInfo.isBlocked
+                      ? "bg-gold/20 text-gold border-gold/40 hover:bg-gold/30"
+                      : "bg-muted text-muted-foreground opacity-50 cursor-not-allowed border-transparent"
                   )}
                 >
-                  Khat
+                  <Book className="w-6 h-6" />
+                  <span className="text-[10px] font-black uppercase tracking-widest">Khat</span>
                 </button>
               </div>
             </div>
