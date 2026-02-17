@@ -910,6 +910,14 @@ const POS = () => {
                 >
                   <Plus className="w-4 h-4" />
                 </button>
+                <button
+                  onClick={() => setMobileCartOpen(true)}
+                  className="hidden md:hidden lg:flex items-center gap-1.5 px-3 py-2 rounded-lg glass text-xs font-bold uppercase tracking-wider text-primary border border-primary/30 hover:bg-primary/10 transition-all active:scale-95"
+                  title="Open Cart"
+                >
+                  <ShoppingCart className="w-4 h-4" />
+                  <span>Cart ({cart.reduce((a, b) => a + b.quantity, 0)})</span>
+                </button>
                 <div className={cn("hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-lg glass text-xs font-medium", online ? 'text-success' : 'text-warning')}>
                   {online ? <Wifi className="w-3.5 h-3.5" /> : <WifiOff className="w-3.5 h-3.5" />}
                   {online ? 'Online' : 'Offline'}
@@ -1289,12 +1297,12 @@ const POS = () => {
           </div> {/* end flex-1 wrapper */}
 
           {/* Mobile Cart Floating Action Button */}
-          {!mobileCartOpen && cart.length > 0 && (
+          {!mobileCartOpen && (
             <motion.div
               initial={{ y: 100, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: 100, opacity: 0 }}
-              className="md:hidden fixed bottom-4 left-4 right-4 z-40"
+              className="lg:hidden fixed bottom-4 left-4 right-4 z-40"
             >
               <button
                 onClick={() => setMobileCartOpen(true)}
