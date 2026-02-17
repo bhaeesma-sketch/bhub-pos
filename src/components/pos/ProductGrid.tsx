@@ -86,13 +86,13 @@ export default function ProductGrid({ products, addToCart, isOwner = true }: Pro
                     whileTap={{ scale: 0.95 }}
                     onClick={() => addToCart(product)}
                     className={cn(
-                      'glass-card rounded-[1.5rem] p-4 text-left hover:border-primary/50 transition-all group h-[240px] flex flex-col',
+                      'rounded-[1.5rem] p-4 text-left border border-slate-200 bg-white hover:border-primary/50 transition-all group h-[240px] flex flex-col shadow-sm',
                       isBelowCost && 'ring-1 ring-destructive/40'
                     )}
                   >
                     <div
                       className={cn(
-                        'w-full aspect-square rounded-xl flex flex-col items-center justify-center mb-4 relative border border-white/5 overflow-hidden bg-white/5 shadow-inner'
+                        'w-full aspect-square rounded-xl flex flex-col items-center justify-center mb-4 relative border border-slate-100 overflow-hidden bg-slate-50 shadow-inner'
                       )}
                     >
                       {product.image_url ? (
@@ -103,7 +103,7 @@ export default function ProductGrid({ products, addToCart, isOwner = true }: Pro
                           loading="lazy"
                         />
                       ) : (
-                        <Package className="w-10 h-10 text-white/10 group-hover:text-primary transition-colors" />
+                        <Package className="w-10 h-10 text-slate-200 group-hover:text-primary transition-colors" />
                       )}
 
                       {product.stock <= product.min_stock && (
@@ -114,11 +114,11 @@ export default function ProductGrid({ products, addToCart, isOwner = true }: Pro
                     </div>
 
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-black text-white uppercase line-clamp-2 leading-none mb-1">
+                      <p className="text-sm font-black text-slate-900 uppercase line-clamp-2 leading-none mb-1">
                         {product.name}
                       </p>
                       {product.name_ar && (
-                        <p className="text-[10px] font-bold text-muted-foreground/50 line-clamp-1 mb-2" dir="rtl">
+                        <p className="text-[10px] font-bold text-slate-400 line-clamp-1 mb-2" dir="rtl">
                           {product.name_ar}
                         </p>
                       )}
@@ -126,12 +126,12 @@ export default function ProductGrid({ products, addToCart, isOwner = true }: Pro
 
                     <div className="flex items-end justify-between mt-auto">
                       <div className="flex flex-col">
-                        <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest opacity-50 leading-none">Price</span>
-                        <span className="text-lg font-black text-gold leading-none mt-1">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest opacity-50 leading-none">Price</span>
+                        <span className="text-lg font-black text-primary leading-none mt-1">
                           {product.price.toFixed(3)}
                         </span>
                       </div>
-                      <span className="text-[10px] font-black text-white/20 uppercase tracking-widest">{product.stock} IN</span>
+                      <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">{product.stock} IN</span>
                     </div>
                   </motion.button>
                 );

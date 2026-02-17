@@ -56,12 +56,12 @@ const Sidebar = () => {
       animate={{ width: collapsed ? 80 : 240 }}
       transition={{ duration: 0.2, ease: 'easeInOut' }}
       className={cn(
-        "h-screen flex flex-col sticky top-0 z-40 bg-sidebar border-r border-sidebar-border",
+        "h-screen flex flex-col sticky top-0 z-40 bg-white border-r border-slate-200",
       )}
     >
       {/* Logo Section */}
-      <div className="flex flex-col items-center justify-center pt-8 pb-8 border-b border-sidebar-border/50">
-        <div className="w-14 h-14 rounded-full border-2 border-gold p-1 shadow-[0_0_20px_rgba(212,175,55,0.2)] bg-background/50 overflow-hidden relative group cursor-pointer transition-transform active:scale-95">
+      <div className="flex flex-col items-center justify-center pt-8 pb-8 border-b border-slate-100 bg-slate-50/30">
+        <div className="w-14 h-14 rounded-full border-2 border-gold p-1 shadow-[0_0_20px_rgba(212,175,55,0.1)] bg-white overflow-hidden relative group cursor-pointer transition-transform active:scale-95">
           <img src={logoIcon} alt="BHAEES" className="w-full h-full object-cover rounded-full transition-transform duration-500 group-hover:scale-110" />
         </div>
         {!collapsed && (
@@ -71,7 +71,7 @@ const Sidebar = () => {
             className="mt-4 text-center px-4"
           >
             <h1 className="text-[10px] font-black text-gold tracking-[0.3em] uppercase leading-none mb-1">B-HUB RETAIL</h1>
-            <p className="text-[8px] font-bold text-muted-foreground uppercase tracking-widest opacity-50">Enterprise Edition</p>
+            <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest opacity-50">Enterprise Edition</p>
           </motion.div>
         )}
       </div>
@@ -91,11 +91,11 @@ const Sidebar = () => {
                 isMasterItem && 'border border-gold/30 shadow-[0_0_20px_-5px_hsl(var(--gold)/0.2)]',
                 isActive
                   ? isMasterItem
-                    ? 'bg-gold/20 text-gold shadow-[0_8px_16px_-4px_hsl(var(--gold)/0.4)]'
-                    : 'bg-primary text-primary-foreground shadow-[0_8px_16px_-4px_rgba(34,197,94,0.3)]'
+                    ? 'bg-gold/20 text-gold shadow-lg shadow-gold/10'
+                    : 'bg-primary text-white shadow-lg shadow-primary/20'
                   : isMasterItem
-                    ? 'text-gold hover:bg-gold/10'
-                    : 'text-muted-foreground hover:bg-sidebar-accent hover:text-foreground'
+                    ? 'text-gold hover:bg-gold/5'
+                    : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900 border border-transparent hover:border-slate-100'
               )}
             >
               <item.icon className={cn(
@@ -136,14 +136,14 @@ const Sidebar = () => {
       <div className="p-3 border-t border-sidebar-border/50">
         <div className={cn(
           "flex items-center gap-2 p-2 rounded-xl transition-all",
-          collapsed ? "justify-center" : "bg-muted/30"
+          collapsed ? "justify-center" : "bg-slate-50 border border-slate-100"
         )}>
           <div className="w-8 h-8 rounded-lg bg-gold/10 flex items-center justify-center text-gold">
             <Users className="w-4 h-4" />
           </div>
           {!collapsed && (
             <div className="flex-1 min-w-0 pr-2">
-              <p className="text-[10px] font-black text-foreground truncate uppercase">{staffSession?.name}</p>
+              <p className="text-[10px] font-black text-slate-900 truncate uppercase">{staffSession?.name}</p>
               <p className="text-[8px] font-bold text-gold uppercase tracking-tighter">{staffSession?.role}</p>
             </div>
           )}

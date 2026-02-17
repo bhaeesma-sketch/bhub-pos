@@ -799,7 +799,7 @@ const POS = () => {
 
   return (
     <>
-      <div className={cn("flex h-screen overflow-hidden rounded-lg flex-col", roleBorderClass)}>
+      <div className={cn("flex h-screen overflow-hidden rounded-lg flex-col bg-slate-50", roleBorderClass)}>
         {/* ═══ MODE BANNER ═══ */}
         <motion.div
           initial={{ y: -40 }}
@@ -868,9 +868,9 @@ const POS = () => {
 
         <div className="flex flex-row flex-1 overflow-hidden h-full relative">
           {/* Main Product Management Area (Dukkantek Style) */}
-          <div className="flex-1 flex flex-col min-w-0 bg-[#0F172A] transition-all duration-300 relative">
+          <div className="flex-1 flex flex-col min-w-0 bg-[#F1F5F9] transition-all duration-300 relative">
             {/* Search Bar */}
-            <div className="p-2 sm:p-4 border-b border-border/50 glass-strong">
+            <div className="p-2 sm:p-4 border-b border-slate-200 bg-white shadow-sm">
               <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
                 {/* Long-press logo for admin toggle */}
                 <button
@@ -898,14 +898,14 @@ const POS = () => {
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     onKeyDown={handleSearchKeyDown}
-                    className="w-full pl-10 pr-4 py-2.5 rounded-lg glass border border-input text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-slate-50 border border-slate-200 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20"
                     autoFocus
                   />
                 </div>
                 <CameraScanner onScan={handleCameraScan} />
                 <button
                   onClick={() => { setQuickAddBarcode(''); setQuickAddName(''); setQuickAddOpen(true); }}
-                  className="p-2.5 rounded-lg glass border border-input text-muted-foreground hover:text-success hover:border-success/50 transition-all"
+                  className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-500 hover:text-success hover:border-success/50 transition-all"
                   title="Quick Add New Product"
                 >
                   <Plus className="w-4 h-4" />
@@ -943,7 +943,7 @@ const POS = () => {
             </div>
 
             {/* Categories */}
-            <div className="px-4 py-3 border-b border-border/50 glass overflow-x-auto">
+            <div className="px-4 py-3 border-b border-slate-200 bg-white overflow-x-auto">
               <div className="flex gap-2">
                 {categories.map(cat => (
                   <button
@@ -952,8 +952,8 @@ const POS = () => {
                     className={cn(
                       'px-4 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all',
                       activeCategory === cat
-                        ? 'gradient-cyan text-primary-foreground glow-cyan'
-                        : 'glass text-secondary-foreground hover:text-foreground'
+                        ? 'bg-primary text-white shadow-md shadow-primary/20'
+                        : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
                     )}
                   >
                     {cat}
@@ -963,7 +963,7 @@ const POS = () => {
             </div>
 
             {/* Quick Tiles for top 10 items */}
-            <div className="px-4 py-3 border-b border-border/50 bg-muted/5">
+            <div className="px-4 py-3 border-b border-slate-200 bg-slate-50/50">
               <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
                 <span className="text-[10px] font-black uppercase tracking-tighter text-muted-foreground vertical-text rotate-180 mr-1">Quick</span>
                 {QUICK_ITEMS.map(item => (
@@ -984,7 +984,7 @@ const POS = () => {
                   <button
                     key={p.id}
                     onClick={() => addToCart(p)}
-                    className="flex flex-col items-center justify-center min-w-[80px] h-16 rounded-xl border-2 border-border/50 bg-background text-foreground transition-all active:scale-90 hover:border-primary/50"
+                    className="flex flex-col items-center justify-center min-w-[80px] h-16 rounded-xl border border-slate-200 bg-white text-slate-900 transition-all active:scale-90 hover:border-primary/50 shadow-sm"
                   >
                     <span className="text-[10px] font-black">{p.price.toFixed(3)}</span>
                     <span className="text-[9px] font-bold truncate px-1 w-full">{p.name}</span>
@@ -994,7 +994,7 @@ const POS = () => {
             </div>
 
             {/* Left: Product Grid (75%) */}
-            <div className="flex-1 flex flex-col min-w-0 bg-[#0F172A]">
+            <div className="flex-1 flex flex-col min-w-0 bg-[#F1F5F9]">
               <ProductGrid
                 products={filteredProducts}
                 addToCart={addToCart}
@@ -1060,24 +1060,24 @@ const POS = () => {
           </div>
 
           {/* Cart Sidebar */}
-          <div className="w-[380px] lg:w-[450px] flex-none border-l border-sidebar-border/50 bg-[#0B1120] flex flex-col items-stretch relative shadow-[-20px_0_40px_rgba(0,0,0,0.5)] z-10">
+          <div className="w-[380px] lg:w-[450px] flex-none border-l border-slate-200 bg-white flex flex-col items-stretch relative shadow-lg z-10 transition-all duration-300">
             {/* Cart Header */}
-            <div className="p-4 border-b border-sidebar-border/30 bg-[#1E293B]">
+            <div className="p-4 border-b border-slate-100 bg-slate-50/50">
               <div className="flex items-center justify-between">
-                <h2 className="text-sm font-black text-foreground uppercase tracking-wider">Current Sale</h2>
+                <h2 className="text-sm font-black text-slate-900 uppercase tracking-wider">Current Sale</h2>
                 <div className="flex items-center gap-2">
                   {/* Navigation buttons removed for side-by-side view */}
-                  <button onClick={clearCart} className="p-1 px-2 rounded-lg text-[10px] font-black text-muted-foreground hover:text-destructive hover:bg-destructive/10 uppercase">Clear</button>
+                  <button onClick={clearCart} className="p-1 px-2 rounded-lg text-[10px] font-black text-slate-400 hover:text-destructive hover:bg-destructive/10 uppercase">Clear</button>
                 </div>
               </div>
             </div>
 
-            {/* Cart Items - High Contrast White on Dark */}
+            {/* Cart Items - High Contrast White on Light */}
             <div className="flex-1 overflow-y-auto pos-scrollbar p-2 space-y-2">
               {cart.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center opacity-20 invert pt-20">
-                  <ShoppingCart className="w-12 h-12 mb-4" />
-                  <p className="text-xs font-black uppercase tracking-widest">Cart is empty</p>
+                <div className="h-full flex flex-col items-center justify-center opacity-40 pt-20">
+                  <ShoppingCart className="w-12 h-12 mb-4 text-slate-300" />
+                  <p className="text-xs font-black uppercase tracking-widest text-slate-400">Cart is empty</p>
                 </div>
               ) : (
                 cart.map((item) => {
@@ -1088,23 +1088,23 @@ const POS = () => {
                       initial={{ opacity: 0, x: 20 }}
                       animate={{ opacity: 1, x: 0 }}
                       key={item.product.id}
-                      className="p-3 rounded-xl bg-white/5 border border-white/10 group"
+                      className="p-3 rounded-xl bg-white border border-slate-200 group shadow-sm transition-all"
                     >
                       <div className="flex justify-between items-start mb-2">
                         <div className="flex-1 min-w-0">
-                          <p className="text-xs font-black text-white uppercase leading-tight truncate">{item.product.name}</p>
-                          <p className="text-[10px] font-bold text-muted-foreground uppercase">{item.product.price.toFixed(3)} x {item.quantity}</p>
+                          <p className="text-xs font-black text-slate-900 uppercase leading-tight truncate">{item.product.name}</p>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase">{item.product.price.toFixed(3)} x {item.quantity}</p>
                         </div>
-                        <p className="text-xs font-black text-gold">OMR {itemFinal.toFixed(3)}</p>
+                        <p className="text-xs font-black text-primary">OMR {itemFinal.toFixed(3)}</p>
                       </div>
 
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-1">
-                          <button onClick={() => updateQuantity(item.product.id, -1)} className="w-7 h-7 rounded-lg bg-white/10 flex items-center justify-center hover:bg-white/20 transition-all font-black">-</button>
-                          <span className="w-8 text-center text-xs font-black text-white">{item.quantity}</span>
-                          <button onClick={() => updateQuantity(item.product.id, 1)} className="w-7 h-7 rounded-lg bg-white/10 flex items-center justify-center hover:bg-white/20 transition-all font-black">+</button>
+                          <button onClick={() => updateQuantity(item.product.id, -1)} className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-all font-black text-slate-900">-</button>
+                          <span className="w-8 text-center text-xs font-black text-slate-900">{item.quantity}</span>
+                          <button onClick={() => updateQuantity(item.product.id, 1)} className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-all font-black text-slate-900">+</button>
                         </div>
-                        <button onClick={() => removeFromCart(item.product.id)} className="text-destructive/40 hover:text-destructive">
+                        <button onClick={() => removeFromCart(item.product.id)} className="text-destructive/40 hover:text-destructive transition-colors">
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
@@ -1115,11 +1115,11 @@ const POS = () => {
             </div>
 
             {/* Cart Summary & Dukkantek-Style Payment Grid */}
-            <div className="p-4 bg-[#111827] border-t border-sidebar-border/50 space-y-4">
-              <div className="space-y-1 bg-black/20 p-3 rounded-xl border border-white/5">
-                <div className="flex justify-between text-[10px] font-black text-muted-foreground uppercase tracking-widest">
+            <div className="p-4 bg-white border-t border-slate-200 space-y-4 shadow-[0_-4px_10px_rgba(0,0,0,0.03)]">
+              <div className="space-y-1 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase tracking-widest">
                   <span>Subtotal</span>
-                  <span className="text-white">OMR {subtotal.toFixed(3)}</span>
+                  <span className="text-slate-900">OMR {subtotal.toFixed(3)}</span>
                 </div>
                 {cartDiscount > 0 && (
                   <div className="flex justify-between text-[10px] font-black text-primary uppercase tracking-widest">
@@ -1127,13 +1127,13 @@ const POS = () => {
                     <span>-OMR {discountAmount.toFixed(3)}</span>
                   </div>
                 )}
-                <div className="flex justify-between text-[10px] font-black text-muted-foreground uppercase tracking-widest">
+                <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase tracking-widest">
                   <span>VAT (5% Inc)</span>
-                  <span className="text-white">OMR {taxAmount.toFixed(3)}</span>
+                  <span className="text-slate-900">OMR {taxAmount.toFixed(3)}</span>
                 </div>
-                <div className="mt-2 pt-2 border-t border-white/10 flex justify-between items-end">
-                  <span className="text-[10px] font-black text-gold uppercase tracking-[0.2em]">Total Amount</span>
-                  <span className="text-2xl font-black text-white italic leading-none">OMR {total.toFixed(3)}</span>
+                <div className="mt-2 pt-2 border-t border-slate-200 flex justify-between items-end">
+                  <span className="text-[10px] font-black text-slate-900 uppercase tracking-[0.2em]">Total Amount</span>
+                  <span className="text-2xl font-black text-slate-900 italic leading-none">OMR {total.toFixed(3)}</span>
                 </div>
               </div>
 
@@ -1144,8 +1144,8 @@ const POS = () => {
                   className={cn(
                     "h-24 rounded-xl flex flex-col items-center justify-center gap-2 transition-all active:scale-95 border-b-4",
                     cart.length > 0 && !subscriptionInfo.isExpired && !subscriptionInfo.isBlocked
-                      ? "bg-success/20 text-success border-success/40 hover:bg-success/30"
-                      : "bg-muted text-muted-foreground opacity-50 cursor-not-allowed border-transparent"
+                      ? "bg-success text-white border-success/60 hover:brightness-110 shadow-lg shadow-success/20"
+                      : "bg-slate-100 text-slate-400 opacity-50 cursor-not-allowed border-transparent"
                   )}
                 >
                   <Banknote className="w-6 h-6" />
@@ -1158,8 +1158,8 @@ const POS = () => {
                   className={cn(
                     "h-24 rounded-xl flex flex-col items-center justify-center gap-2 transition-all active:scale-95 border-b-4",
                     cart.length > 0 && !subscriptionInfo.isExpired && !subscriptionInfo.isBlocked
-                      ? "bg-info/20 text-info border-info/40 hover:bg-info/30"
-                      : "bg-muted text-muted-foreground opacity-50 cursor-not-allowed border-transparent"
+                      ? "bg-info text-white border-info/60 hover:brightness-110 shadow-lg shadow-info/20"
+                      : "bg-slate-100 text-slate-400 opacity-50 cursor-not-allowed border-transparent"
                   )}
                 >
                   <CreditCard className="w-6 h-6" />
@@ -1172,8 +1172,8 @@ const POS = () => {
                   className={cn(
                     "h-24 rounded-xl flex flex-col items-center justify-center gap-2 transition-all active:scale-95 border-b-4",
                     cart.length > 0 && !subscriptionInfo.isExpired && !subscriptionInfo.isBlocked
-                      ? "bg-gold/20 text-gold border-gold/40 hover:bg-gold/30"
-                      : "bg-muted text-muted-foreground opacity-50 cursor-not-allowed border-transparent"
+                      ? "bg-gold text-white border-gold/60 hover:brightness-110 shadow-lg shadow-gold/20"
+                      : "bg-slate-100 text-slate-400 opacity-50 cursor-not-allowed border-transparent"
                   )}
                 >
                   <Book className="w-6 h-6" />
@@ -1228,7 +1228,7 @@ const POS = () => {
                   initial={{ scale: 0.9 }}
                   animate={{ scale: 1 }}
                   exit={{ scale: 0.9 }}
-                  className="glass-card rounded-2xl p-6 w-full max-w-xs mx-4 text-center space-y-4"
+                  className="bg-white rounded-2xl p-6 w-full max-w-xs mx-4 text-center space-y-4 shadow-2xl border border-slate-200"
                 >
                   <ShieldAlert className="w-10 h-10 mx-auto text-destructive" />
                   <h3 className="text-sm font-bold font-heading text-foreground">Below-Cost Sale Detected</h3>
@@ -1243,8 +1243,8 @@ const POS = () => {
                   <div className="flex justify-center gap-2">
                     {[0, 1, 2, 3].map(i => (
                       <div key={i} className={cn(
-                        'w-10 h-10 rounded-lg border-2 flex items-center justify-center text-lg font-bold',
-                        overridePin.length > i ? 'border-primary text-primary' : 'border-border text-transparent'
+                        'w-10 h-10 rounded-lg border-2 flex items-center justify-center text-lg font-bold transition-all',
+                        overridePin.length > i ? 'border-primary bg-primary/10 text-primary' : 'border-slate-200 text-transparent'
                       )}>
                         {overridePin.length > i ? '•' : ''}
                       </div>
@@ -1266,7 +1266,7 @@ const POS = () => {
                               }
                             }
                           }}
-                          className="h-10 rounded-lg glass text-sm font-medium text-foreground hover:bg-primary/10 hover:text-primary transition-colors"
+                          className="h-10 rounded-lg bg-slate-50 border border-slate-200 text-sm font-bold text-slate-900 hover:bg-slate-100 hover:text-primary transition-all active:scale-95 shadow-sm"
                         >
                           {key === 'del' ? '⌫' : key}
                         </button>
@@ -1352,11 +1352,11 @@ const POS = () => {
               initial={{ scale: 0.8, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.8, opacity: 0 }}
-              className="glass-card rounded-2xl p-8 w-full max-w-xs mx-4 text-center space-y-5 ring-2 ring-gold/30 shadow-[0_0_40px_-5px_hsl(var(--gold)/0.4)]"
+              className="bg-white rounded-2xl p-8 w-full max-w-xs mx-4 text-center space-y-5 shadow-2xl border border-slate-200"
             >
               <Crown className="w-10 h-10 mx-auto text-gold" />
-              <h3 className="text-sm font-bold font-heading text-foreground">Owner Authentication</h3>
-              <p className="text-xs text-muted-foreground">Enter Owner PIN to switch to Admin mode</p>
+              <h3 className="text-sm font-bold font-heading text-slate-900 uppercase tracking-widest">Owner Authentication</h3>
+              <p className="text-xs text-slate-400 font-bold uppercase tracking-tighter">Enter Owner PIN to switch to Admin mode</p>
               <div className="flex justify-center gap-3">
                 {[0, 1, 2, 3].map(i => (
                   <motion.div
@@ -1365,8 +1365,8 @@ const POS = () => {
                     className={cn(
                       'w-12 h-12 rounded-xl border-2 flex items-center justify-center text-xl font-bold transition-all',
                       adminTogglePin.length > i
-                        ? 'border-gold bg-gold/10 text-gold'
-                        : 'border-border/50 text-transparent'
+                        ? 'border-gold bg-gold/10 text-gold shadow-md shadow-gold/10'
+                        : 'border-slate-100 text-transparent'
                     )}
                   >
                     {adminTogglePin.length > i ? '•' : ''}
@@ -1391,7 +1391,7 @@ const POS = () => {
                           }
                         }
                       }}
-                      className="h-12 rounded-xl glass text-base font-semibold text-foreground hover:bg-gold/10 hover:text-gold transition-all"
+                      className="h-12 rounded-xl bg-slate-50 border border-slate-200 text-base font-bold text-slate-900 hover:bg-slate-100 hover:text-gold transition-all shadow-sm active:scale-95"
                     >
                       {key === 'del' ? '⌫' : key}
                     </button>
