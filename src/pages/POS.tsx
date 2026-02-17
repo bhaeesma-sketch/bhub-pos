@@ -866,11 +866,11 @@ const POS = () => {
           )}
         </AnimatePresence>
 
-        <div className="flex flex-col sm:flex-row flex-1 overflow-hidden h-full">
-          {/* Main Product Area */}
+        <div className="flex flex-col md:flex-row flex-1 overflow-hidden h-full relative">
+          {/* Main Product Management Area (Dukkantek Style) */}
           <div className={cn(
-            "flex-1 flex flex-col min-w-0 bg-[#0F172A] transition-all duration-300",
-            mobileCartOpen ? "hidden sm:flex" : "flex"
+            "flex-1 flex flex-col min-w-0 bg-[#0F172A] transition-all duration-300 relative",
+            mobileCartOpen ? "hidden md:flex" : "flex"
           )}>
             {/* Search Bar */}
             <div className="p-2 sm:p-4 border-b border-border/50 glass-strong">
@@ -916,12 +916,12 @@ const POS = () => {
                 <button
                   onClick={() => setMobileCartOpen(true)}
                   className={cn(
-                    "sm:hidden flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-[0.1em] transition-all active:scale-95 border-2",
+                    "md:hidden flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-[0.1em] transition-all active:scale-95 border-2",
                     cart.length > 0
                       ? "bg-gold text-black border-white/40 shadow-[0_0_20px_rgba(212,175,55,0.4)] animate-pulse"
                       : "glass text-muted-foreground border-border/50"
                   )}
-                  title="Open Cart"
+                  title="Open Checkout"
                 >
                   <ShoppingCart className="w-4 h-4" />
                   <span>Cart ({cart.reduce((a, b) => a + b.quantity, 0)})</span>
@@ -1072,12 +1072,12 @@ const POS = () => {
               )}
             </AnimatePresence>
 
-            {/* Right: Permanent Cart Sidebar (Hidden ONLY on small mobile unless toggled) */}
+            {/* Right Side: Dukkantek-Style Permanent Billing Sidebar */}
             <div className={cn(
               "border-l border-sidebar-border/50 bg-[#0B1120] flex flex-col transition-all duration-300 relative",
               mobileCartOpen
                 ? "fixed inset-0 z-50 w-full"
-                : "hidden sm:flex sm:w-[380px] lg:w-[420px] sm:static flex-none"
+                : "hidden md:flex md:w-[400px] lg:w-[450px] md:static flex-none shadow-[-10px_0_30px_rgba(0,0,0,0.3)]"
             )}>
               {/* Cart Header */}
               <div className="p-4 border-b border-sidebar-border/30 bg-[#1E293B]">
@@ -1087,9 +1087,9 @@ const POS = () => {
                     {mobileCartOpen && (
                       <button
                         onClick={() => setMobileCartOpen(false)}
-                        className="sm:hidden p-1 px-3 rounded-lg text-xs font-black bg-white/10 text-white hover:bg-white/20 transition-all uppercase"
+                        className="md:hidden p-2 px-4 rounded-xl text-xs font-black bg-white/10 text-white hover:bg-white/20 transition-all uppercase"
                       >
-                        Back
+                        ← Back to Items
                       </button>
                     )}
                     <button onClick={clearCart} className="p-1 px-2 rounded-lg text-[10px] font-black text-muted-foreground hover:text-destructive hover:bg-destructive/10 uppercase">Clear</button>
