@@ -912,11 +912,16 @@ const POS = () => {
                 </button>
                 <button
                   onClick={() => setMobileCartOpen(true)}
-                  className="hidden md:hidden lg:flex items-center gap-1.5 px-3 py-2 rounded-lg glass text-xs font-bold uppercase tracking-wider text-primary border border-primary/30 hover:bg-primary/10 transition-all active:scale-95"
+                  className={cn(
+                    "flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-[0.1em] transition-all active:scale-95 border-2",
+                    cart.length > 0
+                      ? "bg-gold text-black border-white/40 shadow-[0_0_20px_rgba(212,175,55,0.4)] animate-pulse"
+                      : "glass text-muted-foreground border-border/50"
+                  )}
                   title="Open Cart"
                 >
                   <ShoppingCart className="w-4 h-4" />
-                  <span>Cart ({cart.reduce((a, b) => a + b.quantity, 0)})</span>
+                  <span>View Cart ({cart.reduce((a, b) => a + b.quantity, 0)})</span>
                 </button>
                 <div className={cn("hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-lg glass text-xs font-medium", online ? 'text-success' : 'text-warning')}>
                   {online ? <Wifi className="w-3.5 h-3.5" /> : <WifiOff className="w-3.5 h-3.5" />}
@@ -1064,13 +1069,26 @@ const POS = () => {
               )}
             </AnimatePresence>
 
-            {/* Right: Cart (25%) */}
-            <div className={cn("w-full md:w-[380px] border-l border-sidebar-border/50 bg-[#0F172A] flex flex-col transition-all duration-300", mobileCartOpen ? "fixed inset-0 z-50 md:static" : "hidden md:flex")}>
+            {/* Right: Cart (Sidebar on Desktop, Overlay on Mobile) */}
+            <div className={cn(
+              "border-l border-sidebar-border/50 bg-[#0B1120] flex flex-col transition-all duration-300",
+              mobileCartOpen
+                ? "fixed inset-0 z-50 w-full md:w-[450px] md:left-auto md:right-0 shadow-2xl h-full"
+                : "hidden md:flex md:w-[380px] md:static flex-none"
+            )}>
               {/* Cart Header */}
               <div className="p-4 border-b border-sidebar-border/30 bg-[#1E293B]">
                 <div className="flex items-center justify-between">
                   <h2 className="text-sm font-black text-foreground uppercase tracking-wider">Current Sale</h2>
                   <div className="flex items-center gap-2">
+                    {mobileCartOpen && (
+                      <button
+                        onClick={() => setMobileCartOpen(false)}
+                        className="p-1 px-3 rounded-lg text-xs font-black bg-white/10 text-white hover:bg-white/20 transition-all"
+                      >
+                        CLOSE
+                      </button>
+                    )}
                     <button onClick={clearCart} className="p-1 px-2 rounded-lg text-[10px] font-black text-muted-foreground hover:text-destructive hover:bg-destructive/10 uppercase">Clear</button>
                   </div>
                 </div>
@@ -1143,7 +1161,7 @@ const POS = () => {
                   className={cn(
                     "w-full h-20 rounded-2xl flex flex-col items-center justify-center gap-1 transition-all active:scale-95 shadow-2xl relative overflow-hidden",
                     cart.length > 0 && !subscriptionInfo.isExpired && !subscriptionInfo.isBlocked
-                      ? "bg-primary text-primary-foreground glow-cyan-strong"
+                      ? "bg-gradient-to-r from-gold via-yellow-500 to-gold text-black shadow-[0_10px_40px_-10px_rgba(212,175,55,0.5)] border-2 border-white/30"
                       : "bg-muted text-muted-foreground opacity-50 cursor-not-allowed"
                   )}
                 >
@@ -1159,8 +1177,8 @@ const POS = () => {
                     </>
                   ) : (
                     <>
-                      <span className="text-xs font-black uppercase tracking-[0.2em]">Charge Terminal</span>
-                      <span className="text-2xl font-black">OMR {total.toFixed(3)}</span>
+                      <span className="text-xs font-black uppercase tracking-[0.2em]">BILL / TOTAL</span>
+                      <span className="text-2xl font-black italic">OMR {total.toFixed(3)}</span>
                     </>
                   )}
                 </button>
