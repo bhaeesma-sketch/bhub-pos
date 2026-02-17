@@ -28,6 +28,7 @@ export const OnboardingFlow: React.FC<OnboardingProps> = ({ onComplete }) => {
         storeName: '',
         legalName: '',
         crNumber: '',
+        location: '',
         currency: 'OMR',
     });
 
@@ -63,8 +64,9 @@ export const OnboardingFlow: React.FC<OnboardingProps> = ({ onComplete }) => {
             const { error: configError } = await (supabase.from('store_config' as any) as any).upsert({
                 store_name: storeData.storeName,
                 vat_number: vatData.isVatEnabled ? vatData.vatin : null,
-                address: storeData.legalName,
-                currency: 'OMR'
+                address: storeData.legalName + (storeData.location ? ` | ${storeData.location}` : ''),
+                currency: 'OMR',
+                subscription_status: 'blocked'
             });
 
             if (configError) console.error('Store config error:', configError);
@@ -188,15 +190,15 @@ export const OnboardingFlow: React.FC<OnboardingProps> = ({ onComplete }) => {
                                         </div>
                                     </div>
                                     <div className="space-y-1.5">
-                                        <Label htmlFor="email" className="text-[10px] font-black uppercase text-muted-foreground tracking-widest px-1">Email Terminal</Label>
+                                        <Label htmlFor="phone" className="text-[10px] font-black uppercase text-muted-foreground tracking-widest px-1">WhatsApp Number</Label>
                                         <div className="relative">
                                             <Input
-                                                id="email"
-                                                type="email"
+                                                id="phone"
+                                                type="tel"
                                                 className="h-12 rounded-xl glass border-border/40 px-4 font-semibold"
-                                                placeholder="name@business.om"
-                                                value={userData.email}
-                                                onChange={e => setUserData({ ...userData, email: e.target.value })}
+                                                placeholder="+968 9000 0000"
+                                                value={userData.phone}
+                                                onChange={e => setUserData({ ...userData, phone: e.target.value })}
                                             />
                                         </div>
                                     </div>
@@ -218,7 +220,7 @@ export const OnboardingFlow: React.FC<OnboardingProps> = ({ onComplete }) => {
                                 <Button
                                     className="w-full h-14 rounded-2xl gradient-cyan text-white font-black text-base shadow-xl active:scale-95 transition-transform"
                                     onClick={handleNext}
-                                    disabled={!userData.name || !userData.password}
+                                    disabled={!userData.name || !userData.password || !userData.phone}
                                 >
                                     Proceed to Identity <ArrowRight className="ml-2 w-4 h-4" />
                                 </Button>
@@ -254,6 +256,19 @@ export const OnboardingFlow: React.FC<OnboardingProps> = ({ onComplete }) => {
                                             value={storeData.storeName}
                                             onChange={e => setStoreData({ ...storeData, storeName: e.target.value })}
                                         />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor="location" className="text-[10px] font-black uppercase text-muted-foreground tracking-widest px-1">Google Maps Location Link</Label>
+                                        <div className="relative">
+                                            <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                                            <Input
+                                                id="location"
+                                                className="h-12 rounded-xl glass border-border/40 pl-10 pr-4 font-semibold"
+                                                placeholder="https://maps.app.goo.gl/..."
+                                                value={storeData.location}
+                                                onChange={e => setStoreData({ ...storeData, location: e.target.value })}
+                                            />
+                                        </div>
                                     </div>
                                     <div className="grid grid-cols-2 gap-3">
                                         <div className="space-y-1.5">

@@ -10,11 +10,14 @@ import {
   ShieldCheck,
   ChevronLeft,
   ChevronRight,
+  Crown,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import logoIcon from '@/assets/logo-icon.png';
 import { useStaffSession } from '@/contexts/StaffContext';
+import { isJabalShamsMaster } from '@/lib/subscription';
+import { useStoreConfig } from '@/hooks/useSupabaseData';
 
 const allMenuItems = [
   { icon: ShoppingCart, label: 'Register', path: '/pos', ownerOnly: false },
@@ -31,11 +34,19 @@ const Sidebar = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { staffSession } = useStaffSession();
+  const { data: storeConfig } = useStoreConfig();
+  const isMasterStore = isJabalShamsMaster(storeConfig?.store_name);
 
   const isOwner = staffSession?.role === 'owner';
+
+  // Add Master Control item if this is the master store
+  const menuItemsWithMaster = isMasterStore
+    ? [...allMenuItems, { icon: Crown, label: 'Master Control', path: '/master-control', ownerOnly: true, masterOnly: true }]
+    : allMenuItems;
+
   const menuItems = isOwner
-    ? allMenuItems
-    : allMenuItems.filter(item => !item.ownerOnly);
+    ? menuItemsWithMaster
+    : menuItemsWithMaster.filter(item => !item.ownerOnly);
 
   return (
     <motion.aside
@@ -66,18 +77,32 @@ const Sidebar = () => {
       <nav className="flex-1 py-6 px-3 space-y-1.5 overflow-y-auto pos-scrollbar">
         {menuItems.map((item) => {
           const isActive = location.pathname === item.path;
+          const isMasterItem = (item as any).masterOnly;
+
           return (
             <button
               key={item.path}
               onClick={() => navigate(item.path)}
               className={cn(
                 'w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-bold transition-all duration-300 relative group',
+                isMasterItem && 'border border-gold/30 shadow-[0_0_20px_-5px_hsl(var(--gold)/0.2)]',
                 isActive
-                  ? 'bg-primary text-primary-foreground shadow-[0_8px_16px_-4px_rgba(34,197,94,0.3)]'
-                  : 'text-muted-foreground hover:bg-sidebar-accent hover:text-foreground'
+                  ? isMasterItem
+                    ? 'bg-gold/20 text-gold shadow-[0_8px_16px_-4px_hsl(var(--gold)/0.4)]'
+                    : 'bg-primary text-primary-foreground shadow-[0_8px_16px_-4px_rgba(34,197,94,0.3)]'
+                  : isMasterItem
+                    ? 'text-gold hover:bg-gold/10'
+                    : 'text-muted-foreground hover:bg-sidebar-accent hover:text-foreground'
               )}
             >
-              <item.icon className={cn("w-5 h-5 flex-shrink-0 transition-transform group-active:scale-90", isActive ? "text-primary-foreground" : "text-muted-foreground group-hover:text-primary")} />
+              <item.icon className={cn(
+                "w-5 h-5 flex-shrink-0 transition-transform group-active:scale-90",
+                isMasterItem
+                  ? "text-gold"
+                  : isActive
+                    ? "text-primary-foreground"
+                    : "text-muted-foreground group-hover:text-primary"
+              )} />
               <AnimatePresence>
                 {!collapsed && (
                   <motion.span
@@ -93,7 +118,10 @@ const Sidebar = () => {
               {isActive && (
                 <motion.div
                   layoutId="active-indicator"
-                  className="absolute left-[-12px] w-1 h-6 bg-primary rounded-r-full"
+                  className={cn(
+                    "absolute left-[-12px] w-1 h-6 rounded-r-full",
+                    isMasterItem ? "bg-gold" : "bg-primary"
+                  )}
                 />
               )}
             </button>

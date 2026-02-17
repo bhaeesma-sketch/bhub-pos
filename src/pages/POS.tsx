@@ -2,8 +2,9 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Search, Plus, Minus, Trash2, CreditCard, Banknote, Smartphone, User, Percent, Package, ShoppingCart, BookOpen, Printer, DoorOpen, Wifi, WifiOff, HardDrive, LogOut, ShieldAlert, AlertTriangle, Scale, Crown, PauseCircle, Play, Tag, ArrowLeft, X } from 'lucide-react';
 import { Receipt } from '@/components/pos/Receipt';
 import Fuse from 'fuse.js';
-import { useProducts, useCustomers, useCategories } from '@/hooks/useSupabaseData';
+import { useProducts, useCustomers, useCategories, useStoreConfig } from '@/hooks/useSupabaseData';
 import { cn } from '@/lib/utils';
+import { getSubscriptionInfo, isJabalShamsMaster } from '@/lib/subscription';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { QRCodeSVG } from 'qrcode.react';
@@ -75,9 +76,24 @@ const POS = () => {
   const { data: dbProducts = [], isLoading: productsLoading } = useProducts();
   const { data: dbCustomers = [] } = useCustomers();
   const categories = useCategories();
+  const { data: storeConfig } = useStoreConfig();
+
+  // Subscription Gatekeeper
+  const subscriptionInfo = useMemo(() => getSubscriptionInfo(storeConfig), [storeConfig]);
+  const isMasterStore = subscriptionInfo.isJabalShamsMaster;
 
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+
+  // Debounce search for grid filtering
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedQuery(searchQuery);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
   const [activeCategory, setActiveCategory] = useState('All Items');
   const [selectedCustomer, setSelectedCustomer] = useState<string>('Walk-in Customer');
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
@@ -206,6 +222,18 @@ const POS = () => {
     return () => clearTimeout(focusTimer);
   }, [cart.length]);
 
+  // OPTIMIZATION: O(1) Lookup Maps for instant scanning
+  const productMaps = useMemo(() => {
+    const barcodes = new Map<string, DbProduct>();
+    const names = new Map<string, DbProduct>();
+
+    dbProducts.forEach(p => {
+      if (p.barcode) barcodes.set(p.barcode, p);
+      if (p.name) names.set(p.name.toLowerCase(), p);
+    });
+    return { barcodes, names };
+  }, [dbProducts]);
+
   // Fuse.js index for bilingual fuzzy search across 40K+ products
   const fuse = useMemo(() => new Fuse(dbProducts, {
     keys: [
@@ -217,11 +245,13 @@ const POS = () => {
     threshold: 0.35,
     includeScore: true,
     minMatchCharLength: 2,
+    useExtendedSearch: true,
+    ignoreLocation: true,
   }), [dbProducts]);
 
   // Bilingual fuzzy search — no cap, virtual scrolling handles rendering
   const filteredProducts = useMemo(() => {
-    const q = searchQuery.trim();
+    const q = debouncedQuery.trim();
 
     if (!q) {
       return activeCategory === 'All Items'
@@ -229,8 +259,8 @@ const POS = () => {
         : dbProducts.filter(p => p.category === activeCategory);
     }
 
-    // Exact barcode match first
-    const exactBarcode = dbProducts.find(p => p.barcode === q);
+    // Exact barcode match first using Map O(1)
+    const exactBarcode = productMaps.barcodes.get(q);
     if (exactBarcode) return [exactBarcode];
 
     // Fuzzy search
@@ -240,7 +270,7 @@ const POS = () => {
       results = results.filter(p => p.category === activeCategory);
     }
     return results;
-  }, [searchQuery, activeCategory, dbProducts, fuse]);
+  }, [debouncedQuery, activeCategory, dbProducts, fuse, productMaps]);
 
   const addToCart = useCallback((product: DbProduct) => {
     setCart(prev => {
@@ -286,29 +316,39 @@ const POS = () => {
     const cleanBarcode = barcode.trim();
     if (!cleanBarcode) return false;
 
-    const weighed = parseWeighBarcode(cleanBarcode);
-    if (weighed) {
-      const match = dbProducts.find(p =>
-        p.barcode && (p.barcode === weighed.productCode || p.barcode.endsWith(weighed.productCode))
-      );
-      if (match) {
-        addWeighedItem(match, weighed.totalPrice);
-        return true;
+    // 1. PREFIX CHECK (O(1)) for Weighted Items
+    if (cleanBarcode.length >= 13 && cleanBarcode.startsWith('20')) {
+      const weighed = parseWeighBarcode(cleanBarcode);
+      if (weighed) {
+        // Optimistic check: try exact 5-digit match logic if needed, 
+        // but standard weigh barcode usually embeds ID. 
+        // We search for matching barcode suffix or exact logic. 
+        // Since we use Maps, we might need a secondary lookup for 'starts with' or suffix if standard lookup fails.
+        // But dbProducts.find is O(N). To optimize strict prefix 20, we assume the internal code is mapped.
+
+        // Standard strategy: The helper returns 'productCode'. We accept that.
+        // Using logic from before:
+        const match = dbProducts.find(p =>
+          p.barcode && (p.barcode === weighed.productCode || p.barcode.endsWith(weighed.productCode))
+        );
+
+        if (match) {
+          addWeighedItem(match, weighed.totalPrice);
+          return true;
+        }
       }
-      toast.error(`Weighed barcode: product code "${weighed.productCode}" not found.`);
-      return true;
     }
 
-    // Exact barcode match (Primary goal)
-    const exactMatch = dbProducts.find(p => p.barcode === cleanBarcode);
+    // 2. EXACT BARCODE MATCH (O(1)) - The Critical Speedup
+    const exactMatch = productMaps.barcodes.get(cleanBarcode);
     if (exactMatch) {
       addToCart(exactMatch);
       toast.success(`✓ Scanned: ${exactMatch.name}`, { duration: 1500 });
       return true;
     }
 
-    // Fallback: try exact name match
-    const nameMatch = dbProducts.find(p => p.name.toLowerCase() === cleanBarcode.toLowerCase());
+    // 3. EXACT NAME MATCH (O(1))
+    const nameMatch = productMaps.names.get(cleanBarcode.toLowerCase());
     if (nameMatch) {
       addToCart(nameMatch);
       return true;
@@ -316,7 +356,7 @@ const POS = () => {
 
     // If nothing found, return false to trigger Quick Add Popup
     return false;
-  }, [dbProducts, addToCart, addWeighedItem]);
+  }, [dbProducts, addToCart, addWeighedItem, productMaps]);
 
   // Global Scanner Listener
   useEffect(() => {
@@ -798,6 +838,37 @@ const POS = () => {
           )}
         </motion.div>
 
+        {/* ═══ SUBSCRIPTION STATUS BANNER ═══ */}
+        <AnimatePresence>
+          {!isMasterStore && (subscriptionInfo.isExpired || subscriptionInfo.isBlocked || (subscriptionInfo.daysRemaining <= 3 && subscriptionInfo.daysRemaining > 0)) && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className={cn(
+                "flex items-center justify-center gap-2 px-4 py-2 text-xs font-bold uppercase tracking-wider border-b relative overflow-hidden",
+                subscriptionInfo.isExpired || subscriptionInfo.isBlocked
+                  ? "bg-destructive/20 text-destructive border-destructive/30"
+                  : "bg-warning/20 text-warning border-warning/30"
+              )}
+            >
+              <motion.div
+                animate={{ scale: [1, 1.2, 1] }}
+                transition={{ repeat: Infinity, duration: 2 }}
+              >
+                <AlertTriangle className="w-4 h-4" />
+              </motion.div>
+              {subscriptionInfo.isBlocked ? (
+                <span>⛔ Account Blocked — Contact JABALSHAMS ADMIN (+968 XXXXXXXX)</span>
+              ) : subscriptionInfo.isExpired ? (
+                <span>🔒 Trial Ended — Contact JABALSHAMS ADMIN (+968 XXXXXXXX) to Activate</span>
+              ) : (
+                <span>⚠️ Trial Expires in {subscriptionInfo.daysRemaining} Days — Activate Soon!</span>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
           {/* Left: Products */}
           <div className={cn("flex-1 flex flex-col min-w-0", showKhat && "hidden lg:flex", mobileCartOpen ? "hidden md:flex" : "flex")}>
@@ -1063,21 +1134,57 @@ const POS = () => {
 
                 <button
                   onClick={() => initiateCheckout('Cash')}
-                  disabled={cart.length === 0 || isSaving}
+                  disabled={cart.length === 0 || isSaving || (subscriptionInfo.isExpired && !isMasterStore) || subscriptionInfo.isBlocked}
                   className={cn(
-                    "w-full h-20 rounded-2xl flex flex-col items-center justify-center gap-1 transition-all active:scale-95 shadow-2xl",
-                    cart.length > 0
+                    "w-full h-20 rounded-2xl flex flex-col items-center justify-center gap-1 transition-all active:scale-95 shadow-2xl relative overflow-hidden",
+                    cart.length > 0 && !subscriptionInfo.isExpired && !subscriptionInfo.isBlocked
                       ? "bg-primary text-primary-foreground glow-cyan-strong"
                       : "bg-muted text-muted-foreground opacity-50 cursor-not-allowed"
                   )}
                 >
-                  <span className="text-xs font-black uppercase tracking-[0.2em]">Charge Terminal</span>
-                  <span className="text-2xl font-black">OMR {total.toFixed(3)}</span>
+                  {subscriptionInfo.isExpired && !isMasterStore ? (
+                    <>
+                      <ShieldAlert className="w-6 h-6 text-destructive animate-pulse" />
+                      <span className="text-[10px] font-black uppercase tracking-wider">Trial Expired</span>
+                    </>
+                  ) : subscriptionInfo.isBlocked ? (
+                    <>
+                      <ShieldAlert className="w-6 h-6 text-destructive animate-pulse" />
+                      <span className="text-[10px] font-black uppercase tracking-wider">Account Blocked</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-xs font-black uppercase tracking-[0.2em]">Charge Terminal</span>
+                      <span className="text-2xl font-black">OMR {total.toFixed(3)}</span>
+                    </>
+                  )}
                 </button>
 
                 <div className="grid grid-cols-2 gap-2 mt-2">
-                  <button onClick={() => initiateCheckout('Card')} className="h-10 rounded-xl glass border-primary/20 text-[10px] font-black uppercase text-primary hover:bg-primary/10">Card</button>
-                  <button onClick={() => initiateCheckout('Khat/Daftar')} className="h-10 rounded-xl glass border-gold/20 text-[10px] font-black uppercase text-gold hover:bg-gold/10">Khat</button>
+                  <button
+                    onClick={() => initiateCheckout('Card')}
+                    disabled={(subscriptionInfo.isExpired && !isMasterStore) || subscriptionInfo.isBlocked}
+                    className={cn(
+                      "h-10 rounded-xl glass border-primary/20 text-[10px] font-black uppercase transition-all",
+                      (subscriptionInfo.isExpired && !isMasterStore) || subscriptionInfo.isBlocked
+                        ? "opacity-30 cursor-not-allowed"
+                        : "text-primary hover:bg-primary/10"
+                    )}
+                  >
+                    Card
+                  </button>
+                  <button
+                    onClick={() => initiateCheckout('Khat/Daftar')}
+                    disabled={(subscriptionInfo.isExpired && !isMasterStore) || subscriptionInfo.isBlocked}
+                    className={cn(
+                      "h-10 rounded-xl glass border-gold/20 text-[10px] font-black uppercase transition-all",
+                      (subscriptionInfo.isExpired && !isMasterStore) || subscriptionInfo.isBlocked
+                        ? "opacity-30 cursor-not-allowed"
+                        : "text-gold hover:bg-gold/10"
+                    )}
+                  >
+                    Khat
+                  </button>
                 </div>
               </div>
             </div>

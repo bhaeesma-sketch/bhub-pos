@@ -133,3 +133,23 @@ ON CONFLICT DO NOTHING;
 
 -- 8. Verify
 SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';
+
+-- 9. Gatekeeper: Subscription & Multi-Tenant Security
+-- Add subscription columns to store_config
+DO $$ 
+BEGIN 
+    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'store_config' AND COLUMN_NAME = 'subscription_status') THEN
+        ALTER TABLE public.store_config ADD COLUMN subscription_status TEXT DEFAULT 'trial' CHECK (subscription_status IN ('trial', 'active', 'blocked'));
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'store_config' AND COLUMN_NAME = 'expires_at') THEN
+        ALTER TABLE public.store_config ADD COLUMN expires_at TIMESTAMP WITH TIME ZONE DEFAULT (now() + interval '14 days');
+    END IF;
+END $$;
+
+-- Protect subscription status: Only the Master Entity can modify it
+CREATE POLICY "JabalShams Master Control" ON public.store_config
+    FOR ALL
+    USING (true)
+    WITH CHECK (
+        (SELECT store_name FROM public.store_config WHERE id = 1) = 'JABALSHAMS GROCERY'
+    );

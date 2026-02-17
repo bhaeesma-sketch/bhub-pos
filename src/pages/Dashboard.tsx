@@ -58,14 +58,14 @@ const Dashboard = () => {
               <img src={heroBanner} alt="B-HUB POS" className="w-full h-full object-cover absolute inset-0" style={{ minHeight: 180 }} />
               <div className="relative z-10 p-8 flex items-center justify-between" style={{ minHeight: 180 }}>
                 <div>
-                  <h1 className="text-xl sm:text-3xl font-bold font-heading text-foreground">
+                  <h1 className="text-xl sm:text-3xl font-bold font-heading text-white drop-shadow-md">
                     <span className="text-primary text-glow">B-HUB</span>{' '}
                     <span className="text-gold text-glow-gold">POS</span>
                   </h1>
-                  <p className="text-sm text-muted-foreground mt-1">Welcome back! Here's your store overview.</p>
+                  <p className="text-sm text-white/80 mt-1 font-medium drop-shadow">Welcome back! Here's your store overview.</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-white/60 font-medium drop-shadow">
                     {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                   </p>
                 </div>

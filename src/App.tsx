@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { StaffProvider } from "./contexts/StaffContext";
 import AppLayout from "./components/layout/AppLayout";
 import Dashboard from "./pages/Dashboard";
@@ -21,11 +21,15 @@ import { KhatLedger } from "./components/bhub/KhatLedger";
 import { OwnerRemoteDashboard } from "./components/bhub/OwnerRemoteDashboard";
 import Audit from "./pages/Audit";
 import NotFound from "./pages/NotFound";
+import MasterControl from "./pages/MasterControl";
 
 import { useStoreConfig } from "./hooks/useSupabaseData";
 import { useEffect } from "react";
 
 const queryClient = new QueryClient();
+
+import { WaitingForActivation } from "./components/bhub/WaitingForActivation";
+import { isJabalShamsMaster } from "./lib/subscription";
 
 const RootRouter = () => {
   const { staffSession, setStaffSession } = useStaffSession();
@@ -34,7 +38,7 @@ const RootRouter = () => {
   );
 
   // Load store config globally
-  const { data: storeConfig } = useStoreConfig();
+  const { data: storeConfig, isLoading: configLoading } = useStoreConfig();
 
   useEffect(() => {
     if (storeConfig) {
@@ -42,6 +46,12 @@ const RootRouter = () => {
       console.log('Store Config Loaded:', (storeConfig as any)['store_name']);
     }
   }, [storeConfig]);
+
+  if (configLoading) return <div className="min-h-screen bg-background flex items-center justify-center"><div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full" /></div>;
+
+  if (storeConfig?.subscription_status === 'blocked' && !isJabalShamsMaster(storeConfig.store_name)) {
+    return <WaitingForActivation />;
+  }
 
   if (!onboardingComplete) {
     return <OnboardingFlow onComplete={() => setOnboardingComplete(true)} />;
@@ -79,8 +89,12 @@ const RootRouter = () => {
         <Route path="/audit" element={<Audit />} />
 
         {/* Integrated Cloud Features */}
+        <Route path="/bhub" element={<Navigate to="/bhub/khat" replace />} />
         <Route path="/bhub/khat" element={<KhatLedger />} />
         <Route path="/bhub/owner/:storeId" element={<OwnerRemoteDashboard storeId="STORE001" />} />
+
+        {/* Master Control Panel - Hidden Route */}
+        <Route path="/master-control" element={<MasterControl />} />
       </Route>
       <Route path="*" element={<NotFound />} />
     </Routes>
