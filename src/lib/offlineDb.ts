@@ -74,10 +74,11 @@ class OfflineDatabase {
   async saveProducts(products: Tables<'products'>[]) {
     const db = await this.dbPromise;
     const tx = db.transaction('products', 'readwrite');
-    await Promise.all([
-      ...products.map(p => tx.store.put(p)),
-      tx.done
-    ]);
+    const store = tx.objectStore('products');
+    for (const p of products) {
+      store.put(p);
+    }
+    await tx.done;
   }
 
   async getProductByBarcode(barcode: string): Promise<Tables<'products'> | undefined> {
