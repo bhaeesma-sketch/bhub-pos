@@ -1493,17 +1493,21 @@ const POS = () => {
           </AnimatePresence>
 
 
-          {/* Mobile Cart Floating Action Button */}
+          {/* Mobile Bottom FABs: SCAN + View Cart */}
           {!mobileCartOpen && (
             <motion.div
               initial={{ y: 100, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: 100, opacity: 0 }}
-              className="lg:hidden fixed bottom-4 left-4 right-4 z-40"
+              className="lg:hidden fixed bottom-4 left-4 right-4 z-40 flex gap-3"
             >
+              {/* Camera Scan FAB */}
+              <CameraScanner onScan={handleCameraScan} mobileFab />
+
+              {/* View Cart FAB */}
               <button
                 onClick={() => setMobileCartOpen(true)}
-                className="w-full bg-primary text-primary-foreground shadow-[0_8px_30px_rgb(0,0,0,0.12)] shadow-primary/20 rounded-xl p-4 flex items-center justify-between font-bold"
+                className="flex-1 bg-primary text-primary-foreground shadow-[0_8px_30px_rgb(0,0,0,0.12)] shadow-primary/20 rounded-xl p-4 flex items-center justify-between font-bold"
               >
                 <div className="flex items-center gap-2">
                   <div className="bg-black/20 px-2.5 py-1 rounded-lg text-xs backdrop-blur-sm">{cart.reduce((a, b) => a + b.quantity, 0)} items</div>
