@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
 import { useProducts } from '@/hooks/useSupabaseData';
+import CameraScanner from '@/components/pos/CameraScanner';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface POItem {
@@ -128,6 +129,38 @@ const CreatePOModal = ({
         setProductSearch(prev => ({ ...prev, [idx]: '' }));
     };
 
+    const handleScan = (barcode: string) => {
+        const match = dbProducts.find(p => p.barcode === barcode || p.box_barcode === barcode);
+        if (match) {
+            toast.success(`Found: ${match.name}`);
+            setItems(prev => {
+                // If the last item is empty (no name/id), replace it. Otherwise add new.
+                const last = prev[prev.length - 1];
+                const isLastEmpty = !last.product_name && !last.product_id;
+
+                const newItem: POItem = {
+                    product_name: match.name,
+                    quantity: 1,
+                    unit_cost: 0,
+                    sale_price: match.price,
+                    total_cost: 0,
+                    expiry_date: null,
+                    product_id: match.id,
+                };
+
+                if (isLastEmpty) {
+                    const newItems = [...prev];
+                    newItems[prev.length - 1] = newItem;
+                    return newItems;
+                } else {
+                    return [...prev, newItem];
+                }
+            });
+        } else {
+            toast.error(`Product not found: ${barcode}`);
+        }
+    };
+
     const subtotal = items.reduce((s, i) => s + i.total_cost, 0);
     const grandTotal = subtotal + Number(shipmentCost || 0);
 
@@ -236,12 +269,15 @@ const CreatePOModal = ({
                     <div>
                         <div className="flex items-center justify-between mb-3">
                             <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Items Received</label>
-                            <button
-                                onClick={() => setItems(prev => [...prev, emptyItem()])}
-                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 text-primary text-xs font-black hover:bg-primary/20 transition-colors"
-                            >
-                                <Plus className="w-3.5 h-3.5" /> Add Item
-                            </button>
+                            <div className="flex items-center gap-2">
+                                <CameraScanner onScan={handleScan} className="h-7 w-7 p-1.5" />
+                                <button
+                                    onClick={() => setItems(prev => [...prev, emptyItem()])}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 text-primary text-xs font-black hover:bg-primary/20 transition-colors"
+                                >
+                                    <Plus className="w-3.5 h-3.5" /> Add Item
+                                </button>
+                            </div>
                         </div>
 
                         <div className="space-y-3 max-h-[360px] overflow-y-auto pr-1">
