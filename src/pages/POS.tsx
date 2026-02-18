@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Search, Plus, Minus, Trash2, CreditCard, Banknote, Smartphone, User, Percent, Package, ShoppingCart, BookOpen, Printer, DoorOpen, Wifi, WifiOff, HardDrive, LogOut, ShieldAlert, AlertTriangle, Scale, Crown, PauseCircle, Play, Tag, ArrowLeft, X } from 'lucide-react';
+import { Search, Plus, Minus, Trash2, CreditCard, Banknote, Smartphone, User, Percent, Package, ShoppingCart, BookOpen, Book, Printer, DoorOpen, Wifi, WifiOff, HardDrive, LogOut, ShieldAlert, AlertTriangle, Scale, Crown, PauseCircle, Play, Tag, ArrowLeft, X } from 'lucide-react';
 import { Receipt } from '@/components/pos/Receipt';
 import Fuse from 'fuse.js';
 import { useProducts, useCustomers, useCategories, useStoreConfig } from '@/hooks/useSupabaseData';
@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import { getSubscriptionInfo, isJabalShamsMaster } from '@/lib/subscription';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
 import { QRCodeSVG } from 'qrcode.react';
 import { saveOfflineTransaction, getOfflineTransactionCount, startBackgroundSync } from '@/lib/offlineDb';
 import type { Tables } from '@/integrations/supabase/types';
@@ -79,8 +80,16 @@ const POS = () => {
   const { data: storeConfig } = useStoreConfig();
 
   // Subscription Gatekeeper
-  const subscriptionInfo = useMemo(() => getSubscriptionInfo(storeConfig), [storeConfig]);
-  const isMasterStore = subscriptionInfo.isJabalShamsMaster;
+  const subscriptionInfo = useMemo(() => {
+    try {
+      return getSubscriptionInfo(storeConfig);
+    } catch (e) {
+      console.error('Subscription calculating failed:', e);
+      return null;
+    }
+  }, [storeConfig]);
+
+  const isMasterStore = subscriptionInfo?.isJabalShamsMaster || false;
 
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -113,7 +122,7 @@ const POS = () => {
   const [adminTogglePin, setAdminTogglePin] = useState('');
   const [showVaultAnimation, setShowVaultAnimation] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
-  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressTimer = useRef<any>(null);
 
   // Quick Add Product state
   const [quickAddOpen, setQuickAddOpen] = useState(false);
@@ -133,6 +142,10 @@ const POS = () => {
   // Mobile Cart Toggle
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    console.log('🚀 POS Component Initialized');
+  }, []);
 
   // Long-press logo handler for admin quick-toggle
   const handleLogoTouchStart = useCallback(() => {
@@ -154,6 +167,8 @@ const POS = () => {
   }, []);
 
   const handleAdminTogglePin = useCallback(async (pin: string) => {
+    if (!pin) return;
+
     const { data } = await supabase
       .from('staff')
       .select('id, name, role')
@@ -1061,13 +1076,40 @@ const POS = () => {
 
           {/* Cart Sidebar */}
           <div className="w-[380px] lg:w-[450px] flex-none border-l border-slate-200 bg-white flex flex-col items-stretch relative shadow-lg z-10 transition-all duration-300">
-            {/* Cart Header */}
-            <div className="p-4 border-b border-slate-100 bg-slate-50/50">
-              <div className="flex items-center justify-between">
-                <h2 className="text-sm font-black text-slate-900 uppercase tracking-wider">Current Sale</h2>
+            {/* Cart Header - Dukkantek Style Transaction Bar */}
+            <div className="flex-none p-4 bg-slate-900 text-white shadow-xl relative z-10">
+              <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  {/* Navigation buttons removed for side-by-side view */}
-                  <button onClick={clearCart} className="p-1 px-2 rounded-lg text-[10px] font-black text-slate-400 hover:text-destructive hover:bg-destructive/10 uppercase">Clear</button>
+                  <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center border border-primary/30">
+                    <User className="w-4 h-4 text-primary" />
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Active Transaction</span>
+                    <button
+                      onClick={() => setShowCustomerPicker(true)}
+                      className="text-sm font-black text-white flex items-center gap-1 hover:text-primary transition-colors"
+                    >
+                      {selectedCustomer}
+                      <Plus className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 block">Status</span>
+                  <div className="flex items-center justify-end gap-1.5 mt-1">
+                    <div className={cn("w-1.5 h-1.5 rounded-full", online ? 'bg-success animate-pulse' : 'bg-warning')} />
+                    <span className={cn("text-[10px] font-black", online ? 'text-success' : 'text-warning')}>
+                      {online ? 'SYNC_ACTIVE' : 'OFFLINE_MODE'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center justify-between mt-4 pt-4 border-t border-white/10">
+                <button onClick={clearCart} className="text-[10px] font-black text-destructive/80 hover:text-destructive flex items-center gap-1 uppercase tracking-widest">
+                  <Trash2 className="w-3 h-3" /> Clear Cart
+                </button>
+                <div className="flex items-center gap-3">
+                  <span className="text-[10px] font-black text-slate-500 uppercase">Items: {cart.length}</span>
                 </div>
               </div>
             </div>
@@ -1131,291 +1173,298 @@ const POS = () => {
                   <span>VAT (5% Inc)</span>
                   <span className="text-slate-900">OMR {taxAmount.toFixed(3)}</span>
                 </div>
-                <div className="mt-2 pt-2 border-t border-slate-200 flex justify-between items-end">
-                  <span className="text-[10px] font-black text-slate-900 uppercase tracking-[0.2em]">Total Amount</span>
-                  <span className="text-2xl font-black text-slate-900 italic leading-none">OMR {total.toFixed(3)}</span>
+                <div className="mt-2 pt-2 border-t border-slate-200 flex justify-between items-end mb-6">
+                  <div className="flex flex-col">
+                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-1">Total to Pay</span>
+                    <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-primary/5 border border-primary/20">
+                      <span className="text-xs font-black text-primary uppercase">OMR</span>
+                      <span className="text-3xl font-black text-slate-900 italic leading-none">{total.toFixed(3)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => initiateCheckout('Cash')}
+                      disabled={cart.length === 0 || isSaving || (subscriptionInfo.isExpired && !isMasterStore) || subscriptionInfo.isBlocked}
+                      className={cn(
+                        "h-16 rounded-2xl flex items-center justify-center gap-3 transition-all active:scale-95 border-b-4",
+                        cart.length > 0 && !subscriptionInfo.isExpired && !subscriptionInfo.isBlocked
+                          ? "bg-success text-white border-success/60 hover:brightness-110 shadow-lg shadow-success/20"
+                          : "bg-slate-100 text-slate-400 opacity-50 cursor-not-allowed border-transparent"
+                      )}
+                    >
+                      <Banknote className="w-6 h-6" />
+                      <span className="text-sm font-black uppercase tracking-widest">CASH PAY</span>
+                    </button>
+
+                    <button
+                      onClick={() => initiateCheckout('Card')}
+                      disabled={cart.length === 0 || isSaving || (subscriptionInfo.isExpired && !isMasterStore) || subscriptionInfo.isBlocked}
+                      className={cn(
+                        "h-16 rounded-2xl flex items-center justify-center gap-3 transition-all active:scale-95 border-b-4",
+                        cart.length > 0 && !subscriptionInfo.isExpired && !subscriptionInfo.isBlocked
+                          ? "bg-info text-white border-info/60 hover:brightness-110 shadow-lg shadow-info/20"
+                          : "bg-slate-100 text-slate-400 opacity-50 cursor-not-allowed border-transparent"
+                      )}
+                    >
+                      <CreditCard className="w-6 h-6" />
+                      <span className="text-sm font-black uppercase tracking-widest">CARD PAY</span>
+                    </button>
+                  </div>
+
+                  <button
+                    onClick={() => initiateCheckout('Khat/Daftar')}
+                    disabled={cart.length === 0 || isSaving || (subscriptionInfo.isExpired && !isMasterStore) || subscriptionInfo.isBlocked}
+                    className={cn(
+                      "h-14 rounded-2xl flex items-center justify-center gap-3 transition-all active:scale-95 border-b-4",
+                      cart.length > 0 && !subscriptionInfo.isExpired && !subscriptionInfo.isBlocked
+                        ? "bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200"
+                        : "bg-slate-50 text-slate-300 opacity-50 cursor-not-allowed border-transparent"
+                    )}
+                  >
+                    <Book className="w-5 h-5 text-gold" />
+                    <span className="text-xs font-black uppercase tracking-widest">Add to Customer Khat Ledger</span>
+                  </button>
                 </div>
               </div>
-
-              <div className="grid grid-cols-3 gap-2">
-                <button
-                  onClick={() => initiateCheckout('Cash')}
-                  disabled={cart.length === 0 || isSaving || (subscriptionInfo.isExpired && !isMasterStore) || subscriptionInfo.isBlocked}
-                  className={cn(
-                    "h-24 rounded-xl flex flex-col items-center justify-center gap-2 transition-all active:scale-95 border-b-4",
-                    cart.length > 0 && !subscriptionInfo.isExpired && !subscriptionInfo.isBlocked
-                      ? "bg-success text-white border-success/60 hover:brightness-110 shadow-lg shadow-success/20"
-                      : "bg-slate-100 text-slate-400 opacity-50 cursor-not-allowed border-transparent"
-                  )}
-                >
-                  <Banknote className="w-6 h-6" />
-                  <span className="text-[10px] font-black uppercase tracking-widest">Cash</span>
-                </button>
-
-                <button
-                  onClick={() => initiateCheckout('Card')}
-                  disabled={cart.length === 0 || isSaving || (subscriptionInfo.isExpired && !isMasterStore) || subscriptionInfo.isBlocked}
-                  className={cn(
-                    "h-24 rounded-xl flex flex-col items-center justify-center gap-2 transition-all active:scale-95 border-b-4",
-                    cart.length > 0 && !subscriptionInfo.isExpired && !subscriptionInfo.isBlocked
-                      ? "bg-info text-white border-info/60 hover:brightness-110 shadow-lg shadow-info/20"
-                      : "bg-slate-100 text-slate-400 opacity-50 cursor-not-allowed border-transparent"
-                  )}
-                >
-                  <CreditCard className="w-6 h-6" />
-                  <span className="text-[10px] font-black uppercase tracking-widest">Card</span>
-                </button>
-
-                <button
-                  onClick={() => initiateCheckout('Khat/Daftar')}
-                  disabled={cart.length === 0 || isSaving || (subscriptionInfo.isExpired && !isMasterStore) || subscriptionInfo.isBlocked}
-                  className={cn(
-                    "h-24 rounded-xl flex flex-col items-center justify-center gap-2 transition-all active:scale-95 border-b-4",
-                    cart.length > 0 && !subscriptionInfo.isExpired && !subscriptionInfo.isBlocked
-                      ? "bg-gold text-white border-gold/60 hover:brightness-110 shadow-lg shadow-gold/20"
-                      : "bg-slate-100 text-slate-400 opacity-50 cursor-not-allowed border-transparent"
-                  )}
-                >
-                  <Book className="w-6 h-6" />
-                  <span className="text-[10px] font-black uppercase tracking-widest">Khat</span>
-                </button>
-              </div>
             </div>
-          </div>
 
-          {/* Receipt Modal Overlay */}
-          <AnimatePresence>
-            {showReceipt && currentReceiptData && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 overflow-y-auto"
-              >
+            {/* Receipt Modal Overlay */}
+            <AnimatePresence>
+              {showReceipt && currentReceiptData && (
                 <motion.div
-                  initial={{ scale: 0.9, y: 20 }}
-                  animate={{ scale: 1, y: 0 }}
-                  exit={{ scale: 0.9, y: 20 }}
-                  className="relative"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 overflow-y-auto"
                 >
-                  <button
-                    onClick={() => setShowReceipt(false)}
-                    className="absolute -top-12 right-0 p-2 bg-white/20 rounded-full text-white hover:bg-white/40 transition-colors"
+                  <motion.div
+                    initial={{ scale: 0.9, y: 20 }}
+                    animate={{ scale: 1, y: 0 }}
+                    exit={{ scale: 0.9, y: 20 }}
+                    className="relative"
                   >
-                    <X className="w-6 h-6" />
-                  </button>
-                  <Receipt {...currentReceiptData} />
-                  <div className="mt-6 flex justify-center gap-4">
-                    <Button className="h-12 px-8 bg-success font-bold" onClick={() => window.print()}>
-                      <Printer className="mr-2 w-5 h-5" /> Print 80mm
-                    </Button>
-                  </div>
+                    <button
+                      onClick={() => setShowReceipt(false)}
+                      className="absolute -top-12 right-0 p-2 bg-white/20 rounded-full text-white hover:bg-white/40 transition-colors"
+                    >
+                      <X className="w-6 h-6" />
+                    </button>
+                    <Receipt {...currentReceiptData} />
+                    <div className="mt-6 flex justify-center gap-4">
+                      <Button className="h-12 px-8 bg-success font-bold" onClick={() => window.print()}>
+                        <Printer className="mr-2 w-5 h-5" /> Print 80mm
+                      </Button>
+                    </div>
+                  </motion.div>
                 </motion.div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+              )}
+            </AnimatePresence>
 
-          {/* Owner Override Modal for Below-Cost Sales */}
-          <AnimatePresence>
-            {showOwnerOverride && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm"
-              >
+            {/* Owner Override Modal for Below-Cost Sales */}
+            <AnimatePresence>
+              {showOwnerOverride && (
                 <motion.div
-                  initial={{ scale: 0.9 }}
-                  animate={{ scale: 1 }}
-                  exit={{ scale: 0.9 }}
-                  className="bg-white rounded-2xl p-6 w-full max-w-xs mx-4 text-center space-y-4 shadow-2xl border border-slate-200"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm"
                 >
-                  <ShieldAlert className="w-10 h-10 mx-auto text-destructive" />
-                  <h3 className="text-sm font-bold font-heading text-foreground">Below-Cost Sale Detected</h3>
-                  <div className="space-y-1">
-                    {belowCostItems.map(i => (
-                      <p key={i.product.id} className="text-[10px] text-destructive">
-                        {i.product.name}: price OMR {i.product.price.toFixed(3)} &lt; cost OMR {Number(i.product.cost).toFixed(3)}
-                      </p>
-                    ))}
-                  </div>
-                  <p className="text-xs text-muted-foreground">Enter Owner PIN to approve</p>
-                  <div className="flex justify-center gap-2">
-                    {[0, 1, 2, 3].map(i => (
-                      <div key={i} className={cn(
-                        'w-10 h-10 rounded-lg border-2 flex items-center justify-center text-lg font-bold transition-all',
-                        overridePin.length > i ? 'border-primary bg-primary/10 text-primary' : 'border-slate-200 text-transparent'
-                      )}>
-                        {overridePin.length > i ? '•' : ''}
-                      </div>
-                    ))}
-                  </div>
-                  <div className="grid grid-cols-3 gap-2 max-w-[200px] mx-auto">
-                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, null, 0, 'del'].map((key, i) =>
-                      key !== null ? (
-                        <button
-                          key={i}
-                          onClick={() => {
-                            if (key === 'del') {
-                              setOverridePin(prev => prev.slice(0, -1));
-                            } else {
-                              const newPin = overridePin + key;
-                              setOverridePin(newPin);
-                              if (newPin.length === 4) {
-                                setTimeout(() => handleOwnerOverride(newPin), 200);
+                  <motion.div
+                    initial={{ scale: 0.9 }}
+                    animate={{ scale: 1 }}
+                    exit={{ scale: 0.9 }}
+                    className="bg-white rounded-2xl p-6 w-full max-w-xs mx-4 text-center space-y-4 shadow-2xl border border-slate-200"
+                  >
+                    <ShieldAlert className="w-10 h-10 mx-auto text-destructive" />
+                    <h3 className="text-sm font-bold font-heading text-foreground">Below-Cost Sale Detected</h3>
+                    <div className="space-y-1">
+                      {belowCostItems.map(i => (
+                        <p key={i.product.id} className="text-[10px] text-destructive">
+                          {i.product.name}: price OMR {i.product.price.toFixed(3)} &lt; cost OMR {Number(i.product.cost).toFixed(3)}
+                        </p>
+                      ))}
+                    </div>
+                    <p className="text-xs text-muted-foreground">Enter Owner PIN to approve</p>
+                    <div className="flex justify-center gap-2">
+                      {[0, 1, 2, 3].map(i => (
+                        <div key={i} className={cn(
+                          'w-10 h-10 rounded-lg border-2 flex items-center justify-center text-lg font-bold transition-all',
+                          overridePin.length > i ? 'border-primary bg-primary/10 text-primary' : 'border-slate-200 text-transparent'
+                        )}>
+                          {overridePin.length > i ? '•' : ''}
+                        </div>
+                      ))}
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 max-w-[200px] mx-auto">
+                      {[1, 2, 3, 4, 5, 6, 7, 8, 9, null, 0, 'del'].map((key, i) =>
+                        key !== null ? (
+                          <button
+                            key={i}
+                            onClick={() => {
+                              if (key === 'del') {
+                                setOverridePin(prev => prev.slice(0, -1));
+                              } else {
+                                const newPin = overridePin + key;
+                                setOverridePin(newPin);
+                                if (newPin.length === 4) {
+                                  setTimeout(() => handleOwnerOverride(newPin), 200);
+                                }
                               }
-                            }
-                          }}
-                          className="h-10 rounded-lg bg-slate-50 border border-slate-200 text-sm font-bold text-slate-900 hover:bg-slate-100 hover:text-primary transition-all active:scale-95 shadow-sm"
-                        >
-                          {key === 'del' ? '⌫' : key}
-                        </button>
-                      ) : <div key={i} />
-                    )}
-                  </div>
-                  <button
-                    onClick={() => { setShowOwnerOverride(false); setOverridePin(''); setPendingCheckoutMethod(null); }}
-                    className="text-xs text-muted-foreground hover:text-destructive transition-colors"
-                  >
-                    Cancel
-                  </button>
+                            }}
+                            className="h-10 rounded-lg bg-slate-50 border border-slate-200 text-sm font-bold text-slate-900 hover:bg-slate-100 hover:text-primary transition-all active:scale-95 shadow-sm"
+                          >
+                            {key === 'del' ? '⌫' : key}
+                          </button>
+                        ) : <div key={i} />
+                      )}
+                    </div>
+                    <button
+                      onClick={() => { setShowOwnerOverride(false); setOverridePin(''); setPendingCheckoutMethod(null); }}
+                      className="text-xs text-muted-foreground hover:text-destructive transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </motion.div>
                 </motion.div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div> {/* end flex-1 wrapper */}
+              )}
+            </AnimatePresence>
+          </div> {/* end flex-1 wrapper */}
 
-        {/* Mobile Cart Floating Action Button */}
-        {!mobileCartOpen && (
-          <motion.div
-            initial={{ y: 100, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 100, opacity: 0 }}
-            className="lg:hidden fixed bottom-4 left-4 right-4 z-40"
-          >
-            <button
-              onClick={() => setMobileCartOpen(true)}
-              className="w-full bg-primary text-primary-foreground shadow-[0_8px_30px_rgb(0,0,0,0.12)] shadow-primary/20 rounded-xl p-4 flex items-center justify-between font-bold"
+          {/* Mobile Cart Floating Action Button */}
+          {!mobileCartOpen && (
+            <motion.div
+              initial={{ y: 100, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 100, opacity: 0 }}
+              className="lg:hidden fixed bottom-4 left-4 right-4 z-40"
             >
-              <div className="flex items-center gap-2">
-                <div className="bg-black/20 px-2.5 py-1 rounded-lg text-xs backdrop-blur-sm">{cart.reduce((a, b) => a + b.quantity, 0)} items</div>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="uppercase tracking-wider text-sm">View Cart</span>
-                <span className="bg-black/20 px-2.5 py-1 rounded-lg text-xs backdrop-blur-sm">OMR {total.toFixed(3)}</span>
-              </div>
-            </button>
-          </motion.div>
-        )}
+              <button
+                onClick={() => setMobileCartOpen(true)}
+                className="w-full bg-primary text-primary-foreground shadow-[0_8px_30px_rgb(0,0,0,0.12)] shadow-primary/20 rounded-xl p-4 flex items-center justify-between font-bold"
+              >
+                <div className="flex items-center gap-2">
+                  <div className="bg-black/20 px-2.5 py-1 rounded-lg text-xs backdrop-blur-sm">{cart.reduce((a, b) => a + b.quantity, 0)} items</div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="uppercase tracking-wider text-sm">View Cart</span>
+                  <span className="bg-black/20 px-2.5 py-1 rounded-lg text-xs backdrop-blur-sm">OMR {total.toFixed(3)}</span>
+                </div>
+              </button>
+            </motion.div>
+          )}
 
-      </div> {/* end main container */}
+        </div> {/* end main container */}
 
-      {/* Vault Opening Animation Overlay */}
-      <AnimatePresence>
-        {showVaultAnimation && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] flex items-center justify-center bg-black"
-          >
-            <video
-              src={vaultVideo}
-              autoPlay
-              muted
-              playsInline
-              className="w-full h-full object-cover"
-            />
+        {/* Vault Opening Animation Overlay */}
+        <AnimatePresence>
+          {showVaultAnimation && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              transition={{ delay: 1 }}
-              className="absolute bottom-12 text-center"
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[100] flex items-center justify-center bg-black"
             >
-              <p className="text-gold text-lg font-bold font-heading text-glow tracking-widest">OWNER ACCESS</p>
-              <p className="text-muted-foreground text-xs mt-1">Authenticating...</p>
+              <video
+                src={vaultVideo}
+                autoPlay
+                muted
+                playsInline
+                className="w-full h-full object-cover"
+              />
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 1 }}
+                className="absolute bottom-12 text-center"
+              >
+                <p className="text-gold text-lg font-bold font-heading text-glow tracking-widest">OWNER ACCESS</p>
+                <p className="text-muted-foreground text-xs mt-1">Authenticating...</p>
+              </motion.div>
             </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          )}
+        </AnimatePresence>
 
-      {/* Admin Quick-Toggle PIN Pad */}
-      <AnimatePresence>
-        {showAdminToggle && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[90] flex items-center justify-center bg-background/90 backdrop-blur-lg"
-          >
+        {/* Admin Quick-Toggle PIN Pad */}
+        <AnimatePresence>
+          {showAdminToggle && (
             <motion.div
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.8, opacity: 0 }}
-              className="bg-white rounded-2xl p-8 w-full max-w-xs mx-4 text-center space-y-5 shadow-2xl border border-slate-200"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[90] flex items-center justify-center bg-background/90 backdrop-blur-lg"
             >
-              <Crown className="w-10 h-10 mx-auto text-gold" />
-              <h3 className="text-sm font-bold font-heading text-slate-900 uppercase tracking-widest">Owner Authentication</h3>
-              <p className="text-xs text-slate-400 font-bold uppercase tracking-tighter">Enter Owner PIN to switch to Admin mode</p>
-              <div className="flex justify-center gap-3">
-                {[0, 1, 2, 3].map(i => (
-                  <motion.div
-                    key={i}
-                    animate={adminTogglePin.length > i ? { scale: [1, 1.2, 1] } : {}}
-                    className={cn(
-                      'w-12 h-12 rounded-xl border-2 flex items-center justify-center text-xl font-bold transition-all',
-                      adminTogglePin.length > i
-                        ? 'border-gold bg-gold/10 text-gold shadow-md shadow-gold/10'
-                        : 'border-slate-100 text-transparent'
-                    )}
-                  >
-                    {adminTogglePin.length > i ? '•' : ''}
-                  </motion.div>
-                ))}
-              </div>
-              <div className="grid grid-cols-3 gap-2 max-w-[220px] mx-auto">
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9, null, 0, 'del'].map((key, i) =>
-                  key !== null ? (
-                    <button
+              <motion.div
+                initial={{ scale: 0.8, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.8, opacity: 0 }}
+                className="bg-white rounded-2xl p-8 w-full max-w-xs mx-4 text-center space-y-5 shadow-2xl border border-slate-200"
+              >
+                <Crown className="w-10 h-10 mx-auto text-gold" />
+                <h3 className="text-sm font-bold font-heading text-slate-900 uppercase tracking-widest">Owner Authentication</h3>
+                <p className="text-xs text-slate-400 font-bold uppercase tracking-tighter">Enter Owner PIN to switch to Admin mode</p>
+                <div className="flex justify-center gap-3">
+                  {[0, 1, 2, 3].map(i => (
+                    <motion.div
                       key={i}
-                      onClick={() => {
-                        if (key === 'del') {
-                          setAdminTogglePin(prev => prev.slice(0, -1));
-                        } else {
-                          const newPin = adminTogglePin + key;
-                          if (newPin.length <= 4) {
-                            setAdminTogglePin(newPin);
-                            if (newPin.length === 4) {
-                              setTimeout(() => handleAdminTogglePin(newPin), 200);
+                      animate={adminTogglePin.length > i ? { scale: [1, 1.2, 1] } : {}}
+                      className={cn(
+                        'w-12 h-12 rounded-xl border-2 flex items-center justify-center text-xl font-bold transition-all',
+                        adminTogglePin.length > i
+                          ? 'border-gold bg-gold/10 text-gold shadow-md shadow-gold/10'
+                          : 'border-slate-100 text-transparent'
+                      )}
+                    >
+                      {adminTogglePin.length > i ? '•' : ''}
+                    </motion.div>
+                  ))}
+                </div>
+                <div className="grid grid-cols-3 gap-2 max-w-[220px] mx-auto">
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, null, 0, 'del'].map((key, i) =>
+                    key !== null ? (
+                      <button
+                        key={i}
+                        onClick={() => {
+                          if (key === 'del') {
+                            setAdminTogglePin(prev => prev.slice(0, -1));
+                          } else {
+                            const newPin = adminTogglePin + key;
+                            if (newPin.length <= 4) {
+                              setAdminTogglePin(newPin);
+                              if (newPin.length === 4) {
+                                setTimeout(() => handleAdminTogglePin(newPin), 200);
+                              }
                             }
                           }
-                        }
-                      }}
-                      className="h-12 rounded-xl bg-slate-50 border border-slate-200 text-base font-bold text-slate-900 hover:bg-slate-100 hover:text-gold transition-all shadow-sm active:scale-95"
-                    >
-                      {key === 'del' ? '⌫' : key}
-                    </button>
-                  ) : <div key={i} />
-                )}
-              </div>
-              <button
-                onClick={() => { setShowAdminToggle(false); setAdminTogglePin(''); }}
-                className="text-xs text-muted-foreground hover:text-destructive transition-colors"
-              >
-                Cancel
-              </button>
+                        }}
+                        className="h-12 rounded-xl bg-slate-50 border border-slate-200 text-base font-bold text-slate-900 hover:bg-slate-100 hover:text-gold transition-all shadow-sm active:scale-95"
+                      >
+                        {key === 'del' ? '⌫' : key}
+                      </button>
+                    ) : <div key={i} />
+                  )}
+                </div>
+                <button
+                  onClick={() => { setShowAdminToggle(false); setAdminTogglePin(''); }}
+                  className="text-xs text-muted-foreground hover:text-destructive transition-colors"
+                >
+                  Cancel
+                </button>
+              </motion.div>
             </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          )}
+        </AnimatePresence>
 
-      <QuickAddProduct
-        open={quickAddOpen}
-        onOpenChange={setQuickAddOpen}
-        prefillBarcode={quickAddBarcode}
-        prefillName={quickAddName}
-        onProductAdded={handleQuickProductAdded}
-      />
+        <QuickAddProduct
+          open={quickAddOpen}
+          onOpenChange={setQuickAddOpen}
+          prefillBarcode={quickAddBarcode}
+          prefillName={quickAddName}
+          onProductAdded={handleQuickProductAdded}
+        />
+      </div>
     </>
   );
 };

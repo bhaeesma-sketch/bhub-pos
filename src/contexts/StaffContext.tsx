@@ -15,8 +15,14 @@ export const useStaffSession = () => useContext(StaffContext);
 
 export const StaffProvider = ({ children }: { children: ReactNode }) => {
   const [staffSession, setStaffSession] = useState<StaffSession | null>(() => {
-    const saved = localStorage.getItem('bhub_pos_session');
-    return saved ? JSON.parse(saved) : null;
+    try {
+      const saved = localStorage.getItem('bhub_pos_session');
+      return saved ? JSON.parse(saved) : null;
+    } catch (e) {
+      console.error('Failed to parse staff session:', e);
+      localStorage.removeItem('bhub_pos_session');
+      return null;
+    }
   });
 
   useEffect(() => {

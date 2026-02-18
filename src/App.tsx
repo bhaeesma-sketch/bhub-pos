@@ -31,6 +31,8 @@ const queryClient = new QueryClient();
 import { WaitingForActivation } from "./components/bhub/WaitingForActivation";
 import { isJabalShamsMaster } from "./lib/subscription";
 
+import { SplashLoader } from "./components/layout/SplashLoader";
+
 const RootRouter = () => {
   const { staffSession, setStaffSession } = useStaffSession();
   const [onboardingComplete, setOnboardingComplete] = useState(
@@ -47,7 +49,9 @@ const RootRouter = () => {
     }
   }, [storeConfig]);
 
-  if (configLoading) return <div className="min-h-screen bg-background flex items-center justify-center"><div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full" /></div>;
+  if (configLoading) {
+    return <SplashLoader />;
+  }
 
   if (storeConfig?.subscription_status === 'blocked' && !isJabalShamsMaster(storeConfig.store_name)) {
     return <WaitingForActivation />;
@@ -102,18 +106,22 @@ const RootRouter = () => {
   );
 };
 
+import { GlobalErrorBoundary } from "./components/layout/GlobalErrorBoundary";
+
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <StaffProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <RootRouter />
-        </BrowserRouter>
-      </StaffProvider>
-    </TooltipProvider>
-  </QueryClientProvider>
+  <GlobalErrorBoundary>
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <StaffProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <RootRouter />
+          </BrowserRouter>
+        </StaffProvider>
+      </TooltipProvider>
+    </QueryClientProvider>
+  </GlobalErrorBoundary>
 );
 
 export default App;
