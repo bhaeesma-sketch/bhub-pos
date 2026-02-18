@@ -692,10 +692,18 @@ const POS = () => {
 
       // 2. Khat (Debt) Integration
       if ((method === 'Khat/Daftar' || method === 'Credit') && selectedCustomerId) {
-        const { error: khatError } = await (supabase as any).rpc('increment_customer_debt', {
-          cust_id: selectedCustomerId,
-          amount: total
-        });
+        // Get current credit_balance and increment it
+        const { data: custData } = await supabase
+          .from('customers')
+          .select('credit_balance')
+          .eq('id', selectedCustomerId)
+          .single();
+
+        const currentBalance = Number(custData?.credit_balance ?? 0);
+        const { error: khatError } = await supabase
+          .from('customers')
+          .update({ credit_balance: currentBalance + total })
+          .eq('id', selectedCustomerId);
 
         if (khatError) throw khatError;
 
@@ -727,7 +735,7 @@ const POS = () => {
         date: now.toISOString(),
         items: cart.map(i => ({
           name: i.product.name,
-          nameAr: i.product.name_ar || i.product.name,
+          nameAr: i.product.name,
           quantity: i.quantity,
           price: Number(i.product.price),
           total: i.product.price * i.quantity
@@ -785,8 +793,8 @@ const POS = () => {
     }
   };
 
-  // Khat customers — those with debt
-  const khatCustomers = dbCustomers.filter(c => c.total_debt > 0);
+  // Khat customers — those with a credit balance (debt)
+  const khatCustomers = dbCustomers.filter(c => (c.credit_balance ?? 0) > 0);
 
   // PIN gate
   if (!staffSession) {
@@ -1039,22 +1047,22 @@ const POS = () => {
                           <span className="text-xs font-medium text-foreground capitalize">{c.name}</span>
                           <span className={cn(
                             'text-xs font-bold',
-                            c.total_debt > 50 ? 'text-destructive' : c.total_debt > 5 ? 'text-warning' : 'text-success'
+                            (c.credit_balance ?? 0) > 50 ? 'text-destructive' : (c.credit_balance ?? 0) > 5 ? 'text-warning' : 'text-success'
                           )}>
-                            <span className="text-gold">OMR</span> {Number(c.total_debt).toFixed(2)}
+                            <span className="text-gold">OMR</span> {Number(c.credit_balance ?? 0).toFixed(2)}
                           </span>
                         </div>
                         <div className="w-full h-1.5 rounded-full bg-muted overflow-hidden">
                           <div className={cn(
                             'h-full rounded-full transition-all',
-                            c.total_debt > 50 ? 'debt-gauge-red' : c.total_debt > 5 ? 'debt-gauge-yellow' : 'debt-gauge-green'
-                          )} style={{ width: `${Math.min((Number(c.total_debt) / 400) * 100, 100)}%` }} />
+                            (c.credit_balance ?? 0) > 50 ? 'debt-gauge-red' : (c.credit_balance ?? 0) > 5 ? 'debt-gauge-yellow' : 'debt-gauge-green'
+                          )} style={{ width: `${Math.min((Number(c.credit_balance ?? 0) / 400) * 100, 100)}%` }} />
                         </div>
                         <div className="flex items-center justify-between">
                           <span className="text-[10px] text-muted-foreground">{c.phone || '—'}</span>
                           {c.phone && (
                             <a
-                              href={`https://wa.me/${c.phone.replace('+', '')}?text=${encodeURIComponent(`السلام عليكم / Hello!\nThis is a friendly reminder from ${localStorage.getItem('bhub_store_name') || 'B-HUB POS'}.\nYour current balance in our Khat ledger is: OMR ${Number(c.total_debt).toFixed(3)}.\nPlease visit the shop at your convenience to settle the amount.\nThank you for your business!\nB-HUB POS System`)}`}
+                              href={`https://wa.me/${c.phone.replace('+', '')}?text=${encodeURIComponent(`السلام عليكم / Hello!\nThis is a friendly reminder from ${localStorage.getItem('bhub_store_name') || 'B-HUB POS'}.\nYour current balance in our Khat ledger is: OMR ${Number(c.credit_balance ?? 0).toFixed(3)}.\nPlease visit the shop at your convenience to settle the amount.\nThank you for your business!\nB-HUB POS System`)}`}
                               target="_blank" rel="noopener noreferrer"
                               className="text-[10px] text-success hover:underline"
                             >
@@ -1332,6 +1340,111 @@ const POS = () => {
               )}
             </AnimatePresence>
           </div> {/* end flex-1 wrapper */}
+
+          {/* ═══ CUSTOMER PICKER MODAL ═══ */}
+          <AnimatePresence>
+            {showCustomerPicker && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+                onClick={() => setShowCustomerPicker(false)}
+              >
+                <motion.div
+                  initial={{ scale: 0.9, y: 20 }}
+                  animate={{ scale: 1, y: 0 }}
+                  exit={{ scale: 0.9, y: 20 }}
+                  onClick={e => e.stopPropagation()}
+                  className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden"
+                >
+                  {/* Header */}
+                  <div className="bg-slate-900 p-4 text-white">
+                    <h3 className="text-sm font-black uppercase tracking-widest">Select Customer</h3>
+                    <p className="text-[10px] text-slate-400 mt-0.5">Choose for Khat/Credit payment or tracking</p>
+                  </div>
+
+                  {/* Walk-in option */}
+                  <button
+                    onClick={() => {
+                      setSelectedCustomer('Walk-in Customer');
+                      setSelectedCustomerId(null);
+                      setSelectedCustomerPhone('');
+                      setShowCustomerPicker(false);
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-3 border-b border-slate-100 hover:bg-slate-50 transition-colors text-left"
+                  >
+                    <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center">
+                      <User className="w-4 h-4 text-slate-500" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-slate-900">Walk-in Customer</p>
+                      <p className="text-[10px] text-slate-400">No account needed</p>
+                    </div>
+                    {selectedCustomer === 'Walk-in Customer' && (
+                      <div className="ml-auto w-5 h-5 rounded-full bg-primary flex items-center justify-center">
+                        <span className="text-white text-[10px] font-black">✓</span>
+                      </div>
+                    )}
+                  </button>
+
+                  {/* Customer list */}
+                  <div className="max-h-72 overflow-y-auto divide-y divide-slate-100">
+                    {dbCustomers.length === 0 ? (
+                      <div className="p-6 text-center">
+                        <p className="text-xs text-slate-400 font-medium">No customers yet.</p>
+                        <p className="text-[10px] text-slate-300 mt-1">Add customers in the Customers page.</p>
+                      </div>
+                    ) : (
+                      dbCustomers.map(c => (
+                        <button
+                          key={c.id}
+                          onClick={() => {
+                            setSelectedCustomer(c.name);
+                            setSelectedCustomerId(c.id);
+                            setSelectedCustomerPhone(c.phone || '');
+                            setShowCustomerPicker(false);
+                            toast.success(`Customer: ${c.name}`, { duration: 1500 });
+                          }}
+                          className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors text-left"
+                        >
+                          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                            <span className="text-xs font-black text-primary">{c.name.charAt(0).toUpperCase()}</span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-bold text-slate-900 truncate">{c.name}</p>
+                            <p className="text-[10px] text-slate-400">{c.phone || 'No phone'}</p>
+                          </div>
+                          {(c.credit_balance ?? 0) > 0 && (
+                            <div className="text-right flex-shrink-0">
+                              <p className="text-[10px] text-destructive font-black">Owes</p>
+                              <p className="text-xs font-black text-destructive">OMR {Number(c.credit_balance ?? 0).toFixed(3)}</p>
+                            </div>
+                          )}
+                          {selectedCustomerId === c.id && (
+                            <div className="ml-2 w-5 h-5 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
+                              <span className="text-white text-[10px] font-black">✓</span>
+                            </div>
+                          )}
+                        </button>
+                      ))
+                    )}
+                  </div>
+
+                  {/* Footer */}
+                  <div className="p-3 bg-slate-50 border-t border-slate-100">
+                    <button
+                      onClick={() => setShowCustomerPicker(false)}
+                      className="w-full py-2.5 rounded-xl bg-slate-200 text-slate-700 text-xs font-black uppercase tracking-widest hover:bg-slate-300 transition-colors"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
 
           {/* Mobile Cart Floating Action Button */}
           {!mobileCartOpen && (

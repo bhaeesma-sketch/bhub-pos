@@ -61,106 +61,73 @@ export type Database = {
       }
       customers: {
         Row: {
-          address: string | null
-          created_at: string
-          debt_health: string
-          email: string | null
           id: string
           name: string
           phone: string | null
-          total_debt: number
+          credit_balance: number
+          credit_limit: number
+          loyalty_points: number
           total_spent: number
-          updated_at: string
+          notes: string | null
+          created_at: string
         }
         Insert: {
-          address?: string | null
-          created_at?: string
-          debt_health?: string
-          email?: string | null
           id?: string
           name: string
           phone?: string | null
-          total_debt?: number
+          credit_balance?: number
+          credit_limit?: number
+          loyalty_points?: number
           total_spent?: number
-          updated_at?: string
+          notes?: string | null
+          created_at?: string
         }
         Update: {
-          address?: string | null
-          created_at?: string
-          debt_health?: string
-          email?: string | null
           id?: string
           name?: string
           phone?: string | null
-          total_debt?: number
+          credit_balance?: number
+          credit_limit?: number
+          loyalty_points?: number
           total_spent?: number
-          updated_at?: string
+          notes?: string | null
+          created_at?: string
         }
         Relationships: []
       }
       products: {
         Row: {
-          barcode: string | null
-          bulk_qty: number | null
-          bulk_unit: string | null
-          category: string
-          cost: number
-          created_at: string
-          expiry_date: string | null
           id: string
-          image_url: string | null
-          is_weighted: boolean
-          min_stock: number
           name: string
-          name_ar: string | null
           price: number
-          sku: string | null
           stock: number
-          supplier: string | null
-          unit: string
-          updated_at: string
+          barcode: string | null
+          box_barcode: string | null
+          image: string | null
+          category: string
+          created_at: string
         }
         Insert: {
-          barcode?: string | null
-          bulk_qty?: number | null
-          bulk_unit?: string | null
-          category?: string
-          cost?: number
-          created_at?: string
-          expiry_date?: string | null
           id?: string
-          image_url?: string | null
-          is_weighted?: boolean
-          min_stock?: number
           name: string
-          name_ar?: string | null
           price?: number
-          sku?: string | null
           stock?: number
-          supplier?: string | null
-          unit?: string
-          updated_at?: string
+          barcode?: string | null
+          box_barcode?: string | null
+          image?: string | null
+          category?: string
+          created_at?: string
         }
         Update: {
-          barcode?: string | null
-          bulk_qty?: number | null
-          bulk_unit?: string | null
-          category?: string
-          cost?: number
-          created_at?: string
-          expiry_date?: string | null
           id?: string
-          image_url?: string | null
-          is_weighted?: boolean
-          min_stock?: number
           name?: string
-          name_ar?: string | null
           price?: number
-          sku?: string | null
           stock?: number
-          supplier?: string | null
-          unit?: string
-          updated_at?: string
+          barcode?: string | null
+          box_barcode?: string | null
+          image?: string | null
+          category?: string
+          created_at?: string
         }
         Relationships: []
       }
