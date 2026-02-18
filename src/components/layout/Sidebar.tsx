@@ -12,6 +12,7 @@ import {
   ChevronRight,
   Crown,
   LayoutDashboard,
+  ShoppingBag,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -26,6 +27,7 @@ const allMenuItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard', ownerOnly: true },
   { icon: Receipt, label: 'Khat', path: '/bhub/khat', ownerOnly: false },
   { icon: Package, label: 'Inventory', path: '/products', ownerOnly: true },
+  { icon: ShoppingBag, label: 'Purchases', path: '/purchases', ownerOnly: true },
   { icon: ShieldCheck, label: 'Audit', path: '/audit', ownerOnly: true },
   { icon: BarChart3, label: 'Reports', path: '/reports', ownerOnly: true },
   { icon: Users, label: 'Clients', path: '/customers', ownerOnly: true },

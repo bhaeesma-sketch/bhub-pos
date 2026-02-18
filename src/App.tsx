@@ -11,6 +11,7 @@ import Products from "./pages/Products";
 import Customers from "./pages/Customers";
 import Sales from "./pages/Sales";
 import Reports from "./pages/Reports";
+import Purchases from "./pages/Purchases";
 import SettingsPage from "./pages/SettingsPage";
 import OwnerDashboard from "./pages/OwnerDashboard";
 import { OnboardingFlow } from "./components/bhub/OnboardingFlow";
@@ -89,6 +90,7 @@ const RootRouter = () => {
         <Route path="/customers" element={<Customers />} />
         <Route path="/sales" element={<Sales />} />
         <Route path="/reports" element={<Reports />} />
+        <Route path="/purchases" element={<Purchases />} />
         <Route path="/owner" element={<OwnerDashboard />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/audit" element={<Audit />} />

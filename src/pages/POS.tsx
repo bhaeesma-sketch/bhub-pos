@@ -1494,14 +1494,14 @@ const POS = () => {
             )}
           </AnimatePresence>
 
-
           {/* Mobile Bottom FABs: SCAN + View Cart */}
           {!mobileCartOpen && (
             <motion.div
               initial={{ y: 100, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: 100, opacity: 0 }}
-              className="lg:hidden fixed bottom-4 left-4 right-4 z-40 flex gap-3"
+              className="lg:hidden fixed left-4 right-4 z-40 flex gap-3"
+              style={{ bottom: 'max(16px, env(safe-area-inset-bottom, 16px))' }}
             >
               {/* Camera Scan FAB */}
               <CameraScanner onScan={handleCameraScan} mobileFab />
