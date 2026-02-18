@@ -34,9 +34,10 @@ class FirestoreSalesService implements SalesService {
     String? customerId,
     bool isCredit = false,
   }) async {
-    // 1. Prepare Sale Data
-    final subtotal = total / 1.05; 
-    final vat = total - subtotal;
+    // 1. Precise Omani VAT Calculation (Standard 5%)
+    // Total is inclusive of VAT. Subtotal = Total / 1.05
+    final double subtotal = total / 1.05;
+    final double vat = total - subtotal;
 
     final saleRef = _db.collection('sales').doc();
     final saleId = saleRef.id;
@@ -49,44 +50,46 @@ class FirestoreSalesService implements SalesService {
       vat: double.parse(vat.toStringAsFixed(3)),
       total: double.parse(total.toStringAsFixed(3)),
       paymentMethod: paymentMethod,
-      staffId: 'staff_1',
+      staffId: 'admin_om',
       customerId: customerId,
       isCredit: isCredit,
     );
 
     try {
       await _db.runTransaction((transaction) async {
-        // 2. Decrement Stock
+        // 2. Atomic Stock Update
         for (final item in items) {
           final productRef = _db.collection('products').doc(item.productId);
           final snapshot = await transaction.get(productRef);
           if (snapshot.exists) {
-            final currentStock = snapshot.data()?['stock'] as int? ?? 0;
+            final double currentStock = (snapshot.data()?['stock'] ?? 0).toDouble();
             transaction.update(productRef, {'stock': currentStock - item.quantity});
           }
         }
 
-        // 3. Update Customer Debt if Credit
+        // 3. Customer Debt Update (Khat Registry)
         if (isCredit && customerId != null) {
           final customerRef = _db.collection('customers').doc(customerId);
           final custSnap = await transaction.get(customerRef);
           if (custSnap.exists) {
-            final currentDebt = (custSnap.data()?['totalDebt'] ?? 0.0).toDouble();
-            final creditSales = List<String>.from(custSnap.data()?['creditSaleIds'] ?? []);
+            final double currentDebt = (custSnap.data()?['totalDebt'] ?? 0.0).toDouble();
+            final List<String> creditSales = List<String>.from(custSnap.data()?['creditSaleIds'] ?? []);
             creditSales.add(saleId);
+            
             transaction.update(customerRef, {
-              'totalDebt': currentDebt + total,
+              'totalDebt': double.parse((currentDebt + total).toStringAsFixed(3)),
               'creditSaleIds': creditSales,
+              'lastTransactionDate': DateTime.now().toIso8601String(),
             });
           }
         }
 
-        // 4. Write Sale Record
+        // 4. Record the Sale
         transaction.set(saleRef, sale.toMap());
       });
       
     } catch (e) {
-      print("Online transaction failed: $e. Queuing offline.");
+      print("Real-time cloud sync failed: $e. Handing off to Offline Dispatcher.");
       final offlineService = OfflineService();
       await offlineService.queueSale(sale);
     }

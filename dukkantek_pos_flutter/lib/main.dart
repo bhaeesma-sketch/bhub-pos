@@ -60,30 +60,26 @@ class MyApp extends ConsumerWidget {
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Dukkantek POS Clone',
+      title: 'BHAEES Enterprise POS',
       
-      // Theme Setup - Material 3
       themeMode: isDark ? ThemeMode.dark : ThemeMode.light,
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF6750A4), // Purple/Primary like Dukkantek branding
+          seedColor: const Color(0xFF0F172A), 
           brightness: Brightness.light,
         ),
         textTheme: GoogleFonts.outfitTextTheme(),
+        scaffoldBackgroundColor: const Color(0xFFF1F5F9),
       ),
       darkTheme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFFD0BCFF),
+          seedColor: const Color(0xFF0F172A),
           brightness: Brightness.dark,
         ),
         textTheme: GoogleFonts.outfitTextTheme(ThemeData.dark().textTheme),
       ),
-
-      // Localization for Oman Market (RTL Support)
-      // localizationsDelegates: [GlobalMaterialLocalizations.delegate, ...],
-      // supportedLocales: [Locale('en'), Locale('ar')],
       
       home: const AuthGate(),
     );
@@ -95,12 +91,6 @@ class AuthGate extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Check auth state here (mocked for now)
-    final user = null; 
-    // In real app: final user = ref.watch(authStateProvider);
-
-    // If user is null, show Login Screen.
-    // If user is logged in, show Dashboard/POS.
     return const LoginScreen();
   }
 }

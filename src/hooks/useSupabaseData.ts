@@ -97,8 +97,8 @@ export function useTransactions() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('transactions')
-        .select('*, transaction_items(*)')
-        .order('created_at', { ascending: false });
+        .select('*')
+        .order('date', { ascending: false });
       if (error) throw error;
       return data;
     },
@@ -111,29 +111,39 @@ export function useCreateTransaction() {
 
   return useMutation({
     mutationFn: async ({
-      transaction,
+      total,
+      tax,
+      customerId,
       items,
+      paymentMethod,
     }: {
-      transaction: TablesInsert<'transactions'>;
-      items: TablesInsert<'transaction_items'>[];
+      total: number;
+      tax: number;
+      customerId?: string | null;
+      items: Array<{
+        productId: string;
+        productName: string;
+        quantity: number;
+        unitPrice: number;
+        discount?: number;
+        total: number;
+        barcode?: string | null;
+      }>;
+      paymentMethod: string;
     }) => {
       const { data: txData, error: txError } = await supabase
         .from('transactions')
-        .insert(transaction)
+        .insert({
+          total,
+          tax,
+          status: 'completed',
+          customer_id: customerId || null,
+          items,
+          payment_methods: [{ method: paymentMethod, amount: total }],
+        })
         .select()
         .single();
       if (txError) throw txError;
-
-      const itemsWithTxId = items.map((item) => ({
-        ...item,
-        transaction_id: txData.id,
-      }));
-
-      const { error: itemsError } = await supabase
-        .from('transaction_items')
-        .insert(itemsWithTxId);
-      if (itemsError) throw itemsError;
-
       return txData;
     },
     onSuccess: () => {

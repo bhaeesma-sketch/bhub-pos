@@ -136,7 +136,7 @@ export const OnboardingFlow: React.FC<OnboardingProps> = ({ onComplete }) => {
                             <Sparkles className="w-5 h-5 text-gold" />
                         </motion.div>
                     </motion.div>
-                    <h1 className="text-3xl font-black text-foreground font-heading tracking-tighter">B-HUB <span className="text-gold">START</span></h1>
+                    <h1 className="text-3xl font-black text-foreground font-heading tracking-tighter">JABALSHAMS <span className="text-gold">POS</span></h1>
                     <p className="text-muted-foreground text-sm font-medium mt-1">Deploy your cloud retail system in seconds</p>
                 </div>
 

@@ -33,7 +33,7 @@ export const SplashLoader = () => {
                         transition={{ delay: 0.2 }}
                     >
                         <h1 className="text-4xl font-black text-white tracking-tighter uppercase font-heading">
-                            BHAEES <span className="text-gold underline decoration-primary/50 decoration-4">POS</span>
+                            JABALSHAMS <span className="text-gold underline decoration-primary/50 decoration-4">POS</span>
                         </h1>
                         <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.4em] mt-2">
                             Initializing Cloud Engine

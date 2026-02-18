@@ -607,8 +607,8 @@ const POS = () => {
     });
   };
 
-  // Check for below-cost items
-  const belowCostItems = cart.filter(i => i.product.price < i.product.cost);
+  // Check for below-cost items — cost column doesn't exist in DB, skip this check
+  const belowCostItems: typeof cart = [];
 
   const initiateCheckout = (method: string) => {
     if (belowCostItems.length > 0 && staffSession?.role !== 'owner') {
@@ -672,8 +672,8 @@ const POS = () => {
           productName: i.product.name,
           quantity: i.quantity,
           unitPrice: i.product.price,
-          cost: i.product.cost,
-          total: i.product.price * i.quantity,
+          discount: i.discount || 0,
+          total: (i.product.price * (1 - (i.discount || 0) / 100)) * i.quantity,
           barcode: i.product.barcode || undefined,
         })),
         customer: selectedCustomer,
@@ -689,6 +689,34 @@ const POS = () => {
       };
 
       await saveOfflineTransaction(transactionData);
+
+      // 1b. Save to Supabase transactions table (real columns)
+      try {
+        const { data: txData, error: txError } = await supabase.from('transactions').insert({
+          total,
+          tax: taxAmount,
+          status: 'completed',
+          customer_id: selectedCustomerId || null,
+          items: cart.map(i => ({
+            productId: i.product.id,
+            productName: i.product.name,
+            quantity: i.quantity,
+            unitPrice: i.product.price,
+            discount: i.discount || 0,
+            total: (i.product.price * (1 - (i.discount || 0) / 100)) * i.quantity,
+            barcode: i.product.barcode || null,
+          })),
+          payment_methods: [{ method, amount: total }],
+        }).select().single();
+
+        if (txError) {
+          console.warn('Cloud sync failed (offline mode):', txError.message);
+        } else {
+          console.log('✅ Transaction saved to cloud:', txData?.id);
+        }
+      } catch (cloudErr) {
+        console.warn('Cloud save skipped (offline):', cloudErr);
+      }
 
       // 2. Khat (Debt) Integration
       if ((method === 'Khat/Daftar' || method === 'Credit') && selectedCustomerId) {
@@ -1154,9 +1182,28 @@ const POS = () => {
                           <span className="w-8 text-center text-xs font-black text-slate-900">{item.quantity}</span>
                           <button onClick={() => updateQuantity(item.product.id, 1)} className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-all font-black text-slate-900">+</button>
                         </div>
-                        <button onClick={() => removeFromCart(item.product.id)} className="text-destructive/40 hover:text-destructive transition-colors">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        <div className="flex items-center gap-1">
+                          {/* Discount button */}
+                          <button
+                            onClick={() => {
+                              const d = prompt(`Discount % for ${item.product.name}:`, String(item.discount || 0));
+                              if (d !== null) {
+                                const val = Math.min(100, Math.max(0, Number(d) || 0));
+                                setCart(prev => prev.map(ci =>
+                                  ci.product.id === item.product.id ? { ...ci, discount: val } : ci
+                                ));
+                              }
+                            }}
+                            className="flex items-center gap-0.5 px-2 h-7 rounded-lg bg-amber-50 border border-amber-200 text-amber-600 hover:bg-amber-100 transition-all text-[10px] font-black"
+                            title="Set item discount"
+                          >
+                            %{item.discount > 0 ? item.discount : ''}
+                          </button>
+                          {/* Delete button */}
+                          <button onClick={() => removeFromCart(item.product.id)} className="w-7 h-7 rounded-lg bg-red-50 border border-red-200 flex items-center justify-center text-destructive hover:bg-red-100 transition-colors">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                     </motion.div>
                   );

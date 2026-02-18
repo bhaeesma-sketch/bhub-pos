@@ -309,108 +309,36 @@ export type Database = {
           },
         ]
       }
-      transaction_items: {
-        Row: {
-          barcode: string | null
-          cost: number
-          currency: string
-          discount: number
-          id: string
-          product_id: string | null
-          product_name: string
-          quantity: number
-          total: number
-          transaction_id: string
-          unit_price: number
-        }
-        Insert: {
-          barcode?: string | null
-          cost?: number
-          currency?: string
-          discount?: number
-          id?: string
-          product_id?: string | null
-          product_name: string
-          quantity?: number
-          total?: number
-          transaction_id: string
-          unit_price?: number
-        }
-        Update: {
-          barcode?: string | null
-          cost?: number
-          currency?: string
-          discount?: number
-          id?: string
-          product_id?: string | null
-          product_name?: string
-          quantity?: number
-          total?: number
-          transaction_id?: string
-          unit_price?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "transaction_items_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "products"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "transaction_items_transaction_id_fkey"
-            columns: ["transaction_id"]
-            isOneToOne: false
-            referencedRelation: "transactions"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       transactions: {
         Row: {
-          cashier: string | null
-          created_at: string
-          customer_id: string | null
-          customer_name: string
-          discount: number
           id: string
-          invoice_no: string
-          payment_type: string
-          qr_data: string | null
-          status: string
-          subtotal: number
+          date: string
           total: number
-          vat: number
+          tax: number
+          status: string
+          customer_id: string | null
+          items: Json | null
+          payment_methods: Json | null
         }
         Insert: {
-          cashier?: string | null
-          created_at?: string
-          customer_id?: string | null
-          customer_name?: string
-          discount?: number
           id?: string
-          invoice_no: string
-          payment_type?: string
-          qr_data?: string | null
+          date?: string
+          total: number
+          tax: number
           status?: string
-          subtotal?: number
-          total?: number
-          vat?: number
+          customer_id?: string | null
+          items?: Json | null
+          payment_methods?: Json | null
         }
         Update: {
-          cashier?: string | null
-          created_at?: string
-          customer_id?: string | null
-          customer_name?: string
-          discount?: number
           id?: string
-          invoice_no?: string
-          payment_type?: string
-          qr_data?: string | null
-          status?: string
-          subtotal?: number
+          date?: string
           total?: number
-          vat?: number
+          tax?: number
+          status?: string
+          customer_id?: string | null
+          items?: Json | null
+          payment_methods?: Json | null
         }
         Relationships: [
           {

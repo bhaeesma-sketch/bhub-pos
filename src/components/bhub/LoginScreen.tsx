@@ -87,7 +87,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onStar
                             </motion.div>
                             <div className="space-y-2">
                                 <h1 className="text-5xl font-black text-foreground tracking-tighter font-heading text-glow">
-                                    B-HUB <span className="text-gold">POS</span>
+                                    JABALSHAMS <span className="text-gold">POS</span>
                                 </h1>
                                 <p className="text-muted-foreground font-medium tracking-widest uppercase text-[10px]">Professional Cloud Terminal</p>
                             </div>
