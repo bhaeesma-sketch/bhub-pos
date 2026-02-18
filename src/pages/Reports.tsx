@@ -1,188 +1,593 @@
-import { useState } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, AreaChart, Area, PieChart, Pie, Cell } from 'recharts';
-import { Calendar, Download, TrendingUp, DollarSign, ShoppingCart, Package, CreditCard, FileText, RotateCcw, ClipboardList, Warehouse, Users, Search, ChevronDown, ChevronRight } from 'lucide-react';
-import { monthlySalesData, dailySalesData, topSellingProducts } from '@/data/mockData';
+import { useState, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import {
-  digitalSummary,
-  creditCustomersPeriod,
-  creditCustomersAllTime,
-  inventoryReport,
-  purchaseOrders,
-  transactionsReport,
-  refundsReport,
-} from '@/data/reportData';
-import StatCard from '@/components/dashboard/StatCard';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+  AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, PieChart, Pie, Cell,
+} from 'recharts';
+import {
+  TrendingUp, DollarSign, ShoppingCart, Package, CreditCard,
+  FileText, Users, Search, ChevronDown, ChevronRight,
+  RefreshCw, Calendar, Banknote, BookOpen, AlertCircle,
+} from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 
-const tabs = [
-  { id: 'summary', label: 'Digital Summary', icon: FileText },
-  { id: 'inventory', label: 'Stock / Inventory', icon: Warehouse },
-  { id: 'credit', label: 'Customer Credit', icon: CreditCard },
-  { id: 'purchase', label: 'Purchase Orders', icon: ClipboardList },
-  { id: 'transactions', label: 'Transactions', icon: ShoppingCart },
-  { id: 'refunds', label: 'Refunds', icon: RotateCcw },
-  { id: 'analytics', label: 'Analytics', icon: TrendingUp },
-];
+// ─── Types ────────────────────────────────────────────────────────────────────
+interface TxItem {
+  productId: string;
+  productName: string;
+  quantity: number;
+  unitPrice: number;
+  discount?: number;
+  total: number;
+  barcode?: string | null;
+}
+interface PaymentMethod { method: string; amount: number; }
+interface Transaction {
+  id: string;
+  date: string;
+  total: number;
+  tax: number;
+  status: string;
+  customer_id: string | null;
+  items: TxItem[] | null;
+  payment_methods: PaymentMethod[] | null;
+}
+interface Customer {
+  id: string;
+  name: string;
+  phone: string | null;
+  credit_balance: number;
+  total_spent: number;
+}
+interface Product {
+  id: string;
+  name: string;
+  price: number;
+  stock: number;
+  category: string;
+}
 
-const profitData = [
-  { month: 'Jan', revenue: 32500, cost: 22750, profit: 9750 },
-  { month: 'Feb', revenue: 28900, cost: 20230, profit: 8670 },
-  { month: 'Mar', revenue: 35200, cost: 24640, profit: 10560 },
-  { month: 'Apr', revenue: 31800, cost: 22260, profit: 9540 },
-  { month: 'May', revenue: 38500, cost: 26950, profit: 11550 },
-  { month: 'Jun', revenue: 42100, cost: 29470, profit: 12630 },
-];
+// ─── Hooks ────────────────────────────────────────────────────────────────────
+function useReportData() {
+  const txQuery = useQuery({
+    queryKey: ['report_transactions'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('transactions')
+        .select('*')
+        .order('date', { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as Transaction[];
+    },
+    staleTime: 30_000,
+  });
 
-const PIE_COLORS = ['hsl(217, 91%, 50%)', 'hsl(160, 84%, 39%)', 'hsl(38, 92%, 50%)', 'hsl(0, 72%, 51%)'];
+  const custQuery = useQuery({
+    queryKey: ['report_customers'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('customers').select('*').order('name');
+      if (error) throw error;
+      return (data ?? []) as Customer[];
+    },
+    staleTime: 30_000,
+  });
 
-// ============ SUB COMPONENTS ============
+  const prodQuery = useQuery({
+    queryKey: ['report_products'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('products').select('*').order('name');
+      if (error) throw error;
+      return (data ?? []) as Product[];
+    },
+    staleTime: 30_000,
+  });
 
-const DigitalSummaryTab = () => {
-  const s = digitalSummary;
-  const totalSalesAmount = s.salesDetails.reduce((a, b) => a + b.amount, 0);
-  const pieData = s.salesDetails.filter(d => d.amount > 0).map(d => ({ name: d.label, value: d.amount }));
+  return {
+    transactions: txQuery.data ?? [],
+    customers: custQuery.data ?? [],
+    products: prodQuery.data ?? [],
+    loading: txQuery.isLoading || custQuery.isLoading || prodQuery.isLoading,
+    refetch: () => { txQuery.refetch(); custQuery.refetch(); prodQuery.refetch(); },
+  };
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+const fmt = (n: number) => `OMR ${n.toFixed(3)}`;
+const fmtDate = (iso: string) => {
+  try { return new Date(iso).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }); }
+  catch { return iso; }
+};
+const fmtShortDate = (iso: string) => {
+  try { return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }); }
+  catch { return iso; }
+};
+
+const PIE_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
+
+// ─── Stat Card ────────────────────────────────────────────────────────────────
+const Stat = ({ label, value, sub, color = 'bg-primary' }: { label: string; value: string; sub?: string; color?: string }) => (
+  <div className="bg-card rounded-xl border border-border p-4 shadow-sm">
+    <p className="text-xs text-muted-foreground mb-1">{label}</p>
+    <p className={cn('text-2xl font-black text-foreground')}>{value}</p>
+    {sub && <p className="text-[10px] text-muted-foreground mt-1">{sub}</p>}
+  </div>
+);
+
+// ─── SUMMARY TAB ──────────────────────────────────────────────────────────────
+const SummaryTab = ({ transactions, customers }: { transactions: Transaction[]; customers: Customer[] }) => {
+  const totalRevenue = transactions.reduce((s, t) => s + t.total, 0);
+  const totalTax = transactions.reduce((s, t) => s + t.tax, 0);
+  const cashTx = transactions.filter(t => t.payment_methods?.some(p => p.method === 'Cash'));
+  const cardTx = transactions.filter(t => t.payment_methods?.some(p => p.method === 'Card'));
+  const khatTx = transactions.filter(t => t.payment_methods?.some(p => p.method?.includes('Khat') || p.method === 'Credit'));
+  const cashTotal = cashTx.reduce((s, t) => s + t.total, 0);
+  const cardTotal = cardTx.reduce((s, t) => s + t.total, 0);
+  const khatTotal = khatTx.reduce((s, t) => s + t.total, 0);
+  const totalDebt = customers.reduce((s, c) => s + (c.credit_balance ?? 0), 0);
+
+  const pieData = [
+    { name: 'Cash', value: cashTotal },
+    { name: 'Card', value: cardTotal },
+    { name: 'Khat/Credit', value: khatTotal },
+  ].filter(d => d.value > 0);
+
+  // Daily revenue for last 14 days
+  const last14: Record<string, number> = {};
+  for (let i = 13; i >= 0; i--) {
+    const d = new Date(); d.setDate(d.getDate() - i);
+    last14[d.toISOString().slice(0, 10)] = 0;
+  }
+  transactions.forEach(t => {
+    const day = t.date?.slice(0, 10);
+    if (day && last14[day] !== undefined) last14[day] += t.total;
+  });
+  const chartData = Object.entries(last14).map(([date, revenue]) => ({
+    date: fmtShortDate(date + 'T00:00:00'),
+    revenue: +revenue.toFixed(3),
+  }));
 
   return (
     <div className="space-y-6">
-      <div className="bg-card rounded-xl border border-border p-6 shadow-sm">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h3 className="text-lg font-bold text-card-foreground">{s.storeName}</h3>
-            <p className="text-sm text-muted-foreground">Period: {s.period} &bull; Currency: {s.currency}</p>
-          </div>
-          <Badge variant="outline" className="text-xs">{s.currency}</Badge>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-          <div className="bg-muted/50 rounded-lg p-4 text-center">
-            <p className="text-2xl font-bold text-foreground">{s.totalTransactions.toLocaleString()}</p>
-            <p className="text-xs text-muted-foreground mt-1">Total Transactions</p>
-          </div>
-          <div className="bg-muted/50 rounded-lg p-4 text-center">
-            <p className="text-2xl font-bold text-foreground">{s.nonWeightedQty.toLocaleString()}</p>
-            <p className="text-xs text-muted-foreground mt-1">Non-Weighted Items Sold</p>
-          </div>
-          <div className="bg-muted/50 rounded-lg p-4 text-center">
-            <p className="text-2xl font-bold text-foreground">{s.weightedQty} {s.weightedUnit}</p>
-            <p className="text-xs text-muted-foreground mt-1">Weighted Items Sold</p>
-          </div>
-        </div>
+      {/* KPI Row */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <Stat label="Total Revenue" value={fmt(totalRevenue)} sub={`${transactions.length} transactions`} />
+        <Stat label="Cash Sales" value={fmt(cashTotal)} sub={`${cashTx.length} transactions`} />
+        <Stat label="Card Sales" value={fmt(cardTotal)} sub={`${cardTx.length} transactions`} />
+        <Stat label="Khat / Credit" value={fmt(khatTotal)} sub={`${khatTx.length} transactions`} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Sales Details */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <Stat label="VAT Collected (5%)" value={fmt(totalTax)} sub="Included in prices" />
+        <Stat label="Outstanding Debt" value={fmt(totalDebt)} sub={`${customers.filter(c => (c.credit_balance ?? 0) > 0).length} customers`} />
+        <Stat label="Total Customers" value={customers.length.toString()} sub="Registered accounts" />
+      </div>
+
+      {/* Revenue Trend */}
+      <div className="bg-card rounded-xl border border-border p-5 shadow-sm">
+        <h4 className="text-base font-bold text-card-foreground mb-4">Revenue – Last 14 Days</h4>
+        {transactions.length === 0 ? (
+          <div className="h-40 flex items-center justify-center text-muted-foreground text-sm">No sales data yet</div>
+        ) : (
+          <ResponsiveContainer width="100%" height={220}>
+            <AreaChart data={chartData}>
+              <defs>
+                <linearGradient id="rev" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(220,13%,91%)" />
+              <XAxis dataKey="date" tick={{ fontSize: 10 }} />
+              <YAxis tick={{ fontSize: 10 }} />
+              <Tooltip formatter={(v: number) => [`OMR ${v.toFixed(3)}`, 'Revenue']} />
+              <Area type="monotone" dataKey="revenue" stroke="#3b82f6" fill="url(#rev)" strokeWidth={2} />
+            </AreaChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+
+      {/* Payment breakdown pie */}
+      {pieData.length > 0 && (
         <div className="bg-card rounded-xl border border-border p-5 shadow-sm">
-          <h4 className="text-base font-semibold text-card-foreground mb-4">Sales Details</h4>
-          <div className="space-y-3">
-            {s.salesDetails.map(d => (
-              <div key={d.label} className="flex items-center justify-between py-2 border-b border-border last:border-0">
-                <span className="text-sm text-muted-foreground">{d.label}</span>
-                <span className="text-sm font-semibold text-foreground">{s.currency} {d.amount.toFixed(2)}</span>
-              </div>
+          <h4 className="text-base font-bold text-card-foreground mb-4">Payment Method Breakdown</h4>
+          <div className="flex flex-col sm:flex-row items-center gap-6">
+            <ResponsiveContainer width={220} height={180}>
+              <PieChart>
+                <Pie data={pieData} cx="50%" cy="50%" innerRadius={45} outerRadius={80} dataKey="value">
+                  {pieData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                </Pie>
+                <Tooltip formatter={(v: number) => `OMR ${v.toFixed(3)}`} />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="space-y-2">
+              {pieData.map((d, i) => (
+                <div key={d.name} className="flex items-center gap-3">
+                  <div className="w-3 h-3 rounded-full" style={{ background: PIE_COLORS[i % PIE_COLORS.length] }} />
+                  <span className="text-sm text-foreground font-medium">{d.name}</span>
+                  <span className="text-sm font-bold text-foreground ml-auto">{fmt(d.value)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─── TRANSACTIONS TAB ─────────────────────────────────────────────────────────
+const TransactionsTab = ({ transactions, customers }: { transactions: Transaction[]; customers: Customer[] }) => {
+  const [search, setSearch] = useState('');
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [filterMethod, setFilterMethod] = useState<string>('All');
+
+  const custMap = useMemo(() => {
+    const m: Record<string, string> = {};
+    customers.forEach(c => { m[c.id] = c.name; });
+    return m;
+  }, [customers]);
+
+  const filtered = useMemo(() => {
+    return transactions.filter(t => {
+      const method = t.payment_methods?.[0]?.method ?? '';
+      const matchMethod = filterMethod === 'All' || method.includes(filterMethod);
+      const matchSearch = search === '' ||
+        t.id.toLowerCase().includes(search.toLowerCase()) ||
+        (t.customer_id && custMap[t.customer_id]?.toLowerCase().includes(search.toLowerCase())) ||
+        t.items?.some(i => i.productName.toLowerCase().includes(search.toLowerCase()));
+      return matchMethod && matchSearch;
+    });
+  }, [transactions, search, filterMethod, custMap]);
+
+  const totalRevenue = filtered.reduce((s, t) => s + t.total, 0);
+  const totalTax = filtered.reduce((s, t) => s + t.tax, 0);
+  const totalItems = filtered.reduce((s, t) => s + (t.items?.reduce((a, i) => a + i.quantity, 0) ?? 0), 0);
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <Stat label="Transactions Shown" value={filtered.length.toString()} />
+        <Stat label="Total Revenue" value={fmt(totalRevenue)} />
+        <Stat label="VAT (5%)" value={fmt(totalTax)} />
+        <Stat label="Items Sold" value={totalItems.toString()} />
+      </div>
+
+      <div className="bg-card rounded-xl border border-border p-5 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <h4 className="text-base font-bold text-card-foreground">All Transactions</h4>
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Method filter */}
+            {['All', 'Cash', 'Card', 'Khat'].map(m => (
+              <button
+                key={m}
+                onClick={() => setFilterMethod(m)}
+                className={cn(
+                  'px-3 py-1.5 rounded-lg text-xs font-bold transition-colors',
+                  filterMethod === m ? 'bg-primary text-white' : 'bg-muted text-muted-foreground hover:bg-accent'
+                )}
+              >
+                {m}
+              </button>
             ))}
-            <div className="flex items-center justify-between py-2 bg-primary/5 rounded-lg px-3 -mx-1">
-              <span className="text-sm font-bold text-foreground">Total</span>
-              <span className="text-sm font-bold text-primary">{s.currency} {totalSalesAmount.toFixed(2)}</span>
+            {/* Search */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+              <input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Search..."
+                className="pl-8 pr-3 py-1.5 rounded-lg border border-border bg-background text-xs text-foreground w-44 focus:outline-none focus:ring-2 focus:ring-primary/30"
+              />
             </div>
           </div>
         </div>
 
-        {/* Pie Chart */}
-        <div className="bg-card rounded-xl border border-border p-5 shadow-sm">
-          <h4 className="text-base font-semibold text-card-foreground mb-4">Sales Breakdown</h4>
-          <ResponsiveContainer width="100%" height={220}>
-            <PieChart>
-              <Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={85} dataKey="value" label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={false} fontSize={10}>
-                {pieData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
-              </Pie>
-              <Tooltip formatter={(v: number) => `${s.currency} ${v.toFixed(2)}`} />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* Outstanding + Totals */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {s.outstanding.map(o => (
-          <div key={o.label} className="bg-card rounded-xl border border-border p-4 shadow-sm">
-            <p className="text-xs text-muted-foreground mb-1">{o.label}</p>
-            <p className="text-xl font-bold text-foreground">{s.currency} {o.amount.toFixed(2)}</p>
+        {filtered.length === 0 ? (
+          <div className="py-16 text-center">
+            <AlertCircle className="w-10 h-10 text-muted-foreground mx-auto mb-3 opacity-40" />
+            <p className="text-sm text-muted-foreground font-medium">No transactions found</p>
+            <p className="text-xs text-muted-foreground mt-1">Make a sale in the POS to see it here</p>
           </div>
-        ))}
-        <div className="bg-card rounded-xl border border-border p-4 shadow-sm">
-          <p className="text-xs text-muted-foreground mb-1">Customer Refund</p>
-          <p className="text-xl font-bold text-destructive">{s.currency} {s.customerRefund.toFixed(2)}</p>
-        </div>
+        ) : (
+          <div className="overflow-auto max-h-[600px] pos-scrollbar space-y-2">
+            {filtered.map(t => {
+              const method = t.payment_methods?.[0]?.method ?? 'Cash';
+              const customerName = t.customer_id ? (custMap[t.customer_id] ?? 'Unknown') : 'Walk-in';
+              const isOpen = expanded === t.id;
+              const methodColor = method.includes('Khat') || method === 'Credit'
+                ? 'border-amber-300 text-amber-700 bg-amber-50'
+                : method === 'Card'
+                  ? 'border-blue-300 text-blue-700 bg-blue-50'
+                  : 'border-green-300 text-green-700 bg-green-50';
+
+              return (
+                <div key={t.id} className="border border-border rounded-xl overflow-hidden">
+                  {/* Row header */}
+                  <button
+                    onClick={() => setExpanded(isOpen ? null : t.id)}
+                    className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/40 transition-colors text-left"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      {isOpen
+                        ? <ChevronDown className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                        : <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                      }
+                      <div className="min-w-0">
+                        <p className="text-xs font-black text-foreground truncate">{customerName}</p>
+                        <p className="text-[10px] text-muted-foreground">{fmtDate(t.date)}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 flex-shrink-0">
+                      <span className={cn('text-[10px] font-black px-2 py-0.5 rounded-full border', methodColor)}>
+                        {method}
+                      </span>
+                      <span className="text-sm font-black text-foreground">{fmt(t.total)}</span>
+                    </div>
+                  </button>
+
+                  {/* Expanded items */}
+                  {isOpen && (
+                    <div className="border-t border-border bg-slate-50 px-4 py-3">
+                      {/* Summary row */}
+                      <div className="grid grid-cols-3 gap-3 mb-3 text-center">
+                        <div className="bg-white rounded-lg p-2 border border-slate-200">
+                          <p className="text-[10px] text-muted-foreground">Subtotal</p>
+                          <p className="text-xs font-black text-foreground">{fmt(t.total - t.tax)}</p>
+                        </div>
+                        <div className="bg-white rounded-lg p-2 border border-slate-200">
+                          <p className="text-[10px] text-muted-foreground">VAT (5%)</p>
+                          <p className="text-xs font-black text-foreground">{fmt(t.tax)}</p>
+                        </div>
+                        <div className="bg-primary/10 rounded-lg p-2 border border-primary/20">
+                          <p className="text-[10px] text-primary">Total Paid</p>
+                          <p className="text-xs font-black text-primary">{fmt(t.total)}</p>
+                        </div>
+                      </div>
+
+                      {/* Items table */}
+                      {t.items && t.items.length > 0 ? (
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="text-[10px]">Product</TableHead>
+                              <TableHead className="text-right text-[10px]">Price</TableHead>
+                              <TableHead className="text-right text-[10px]">Qty</TableHead>
+                              <TableHead className="text-right text-[10px]">Disc%</TableHead>
+                              <TableHead className="text-right text-[10px]">Line Total</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {t.items.map((item, idx) => (
+                              <TableRow key={idx}>
+                                <TableCell className="text-xs font-medium text-foreground py-2">{item.productName}</TableCell>
+                                <TableCell className="text-right text-xs py-2">{item.unitPrice?.toFixed(3)}</TableCell>
+                                <TableCell className="text-right text-xs py-2">{item.quantity}</TableCell>
+                                <TableCell className="text-right text-xs py-2">
+                                  {item.discount ? (
+                                    <span className="text-amber-600 font-bold">{item.discount}%</span>
+                                  ) : '—'}
+                                </TableCell>
+                                <TableCell className="text-right text-xs font-bold text-foreground py-2">
+                                  {fmt(item.total)}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      ) : (
+                        <p className="text-xs text-muted-foreground text-center py-3">No item details stored</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ─── CUSTOMER CREDIT TAB ──────────────────────────────────────────────────────
+const CustomerCreditTab = ({ customers, transactions }: { customers: Customer[]; transactions: Transaction[] }) => {
+  const custMap = useMemo(() => {
+    const m: Record<string, string> = {};
+    customers.forEach(c => { m[c.id] = c.name; });
+    return m;
+  }, [customers]);
+
+  const totalDebt = customers.reduce((s, c) => s + (c.credit_balance ?? 0), 0);
+  const totalSpent = customers.reduce((s, c) => s + (c.total_spent ?? 0), 0);
+  const debtors = customers.filter(c => (c.credit_balance ?? 0) > 0);
+
+  // Per-customer transaction history
+  const [selectedCust, setSelectedCust] = useState<string | null>(null);
+  const custTx = useMemo(() =>
+    selectedCust ? transactions.filter(t => t.customer_id === selectedCust) : [],
+    [selectedCust, transactions]
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <Stat label="Total Outstanding Debt" value={fmt(totalDebt)} sub={`${debtors.length} customers owe money`} />
+        <Stat label="Total Spent (All Customers)" value={fmt(totalSpent)} />
+        <Stat label="Registered Customers" value={customers.length.toString()} />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="bg-card rounded-xl border border-border p-5 shadow-sm text-center">
-          <p className="text-xs text-muted-foreground mb-1">Net Cash</p>
-          <p className="text-3xl font-bold text-foreground">{s.currency} {s.netCash.toFixed(2)}</p>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Customer list */}
+        <div className="bg-card rounded-xl border border-border p-5 shadow-sm">
+          <h4 className="text-base font-bold text-card-foreground mb-4">Customer Credit Balances</h4>
+          {customers.length === 0 ? (
+            <div className="py-10 text-center text-sm text-muted-foreground">No customers yet</div>
+          ) : (
+            <div className="space-y-2 max-h-[500px] overflow-y-auto pos-scrollbar">
+              {customers.map(c => (
+                <button
+                  key={c.id}
+                  onClick={() => setSelectedCust(selectedCust === c.id ? null : c.id)}
+                  className={cn(
+                    'w-full flex items-center justify-between p-3 rounded-xl border transition-all text-left',
+                    selectedCust === c.id
+                      ? 'border-primary bg-primary/5'
+                      : 'border-border hover:border-primary/40 hover:bg-muted/30'
+                  )}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                      <span className="text-sm font-black text-primary">{c.name.charAt(0).toUpperCase()}</span>
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-foreground">{c.name}</p>
+                      <p className="text-[10px] text-muted-foreground">{c.phone || 'No phone'}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    {(c.credit_balance ?? 0) > 0 ? (
+                      <>
+                        <p className="text-[10px] text-destructive font-black">OWES</p>
+                        <p className="text-sm font-black text-destructive">{fmt(c.credit_balance ?? 0)}</p>
+                      </>
+                    ) : (
+                      <span className="text-[10px] text-success font-black px-2 py-0.5 bg-success/10 rounded-full">Clear</span>
+                    )}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
-        <div className="bg-primary/10 rounded-xl border border-primary/20 p-5 shadow-sm text-center">
-          <p className="text-xs text-primary mb-1">Grand Total Sales</p>
-          <p className="text-3xl font-bold text-primary">{s.currency} {s.grandTotalSales.toFixed(2)}</p>
+
+        {/* Selected customer transactions */}
+        <div className="bg-card rounded-xl border border-border p-5 shadow-sm">
+          <h4 className="text-base font-bold text-card-foreground mb-4">
+            {selectedCust
+              ? `Transactions — ${custMap[selectedCust] ?? 'Customer'}`
+              : 'Select a customer to view history'
+            }
+          </h4>
+          {!selectedCust ? (
+            <div className="py-10 text-center text-sm text-muted-foreground opacity-50">
+              <Users className="w-8 h-8 mx-auto mb-2" />
+              Click a customer on the left
+            </div>
+          ) : custTx.length === 0 ? (
+            <div className="py-10 text-center text-sm text-muted-foreground">No transactions for this customer</div>
+          ) : (
+            <div className="space-y-2 max-h-[500px] overflow-y-auto pos-scrollbar">
+              {custTx.map(t => {
+                const method = t.payment_methods?.[0]?.method ?? 'Cash';
+                return (
+                  <div key={t.id} className="p-3 rounded-xl border border-border bg-muted/20">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-[10px] text-muted-foreground">{fmtDate(t.date)}</p>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-[10px]">{method}</Badge>
+                        <span className="text-sm font-black text-foreground">{fmt(t.total)}</span>
+                      </div>
+                    </div>
+                    {t.items && t.items.length > 0 && (
+                      <div className="space-y-1">
+                        {t.items.map((item, idx) => (
+                          <div key={idx} className="flex justify-between text-[10px] text-muted-foreground">
+                            <span>{item.productName} × {item.quantity}</span>
+                            <span className="font-bold">{fmt(item.total)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
 };
 
-const InventoryTab = () => {
+// ─── INVENTORY TAB ────────────────────────────────────────────────────────────
+const InventoryTab = ({ products, transactions }: { products: Product[]; transactions: Transaction[] }) => {
   const [search, setSearch] = useState('');
-  const filtered = inventoryReport.filter(i => i.name.toLowerCase().includes(search.toLowerCase()));
-  const totalValue = inventoryReport.reduce((a, b) => a + b.totalStockValue, 0);
-  const totalInStock = inventoryReport.reduce((a, b) => a + b.inStock, 0);
-  const totalSold = inventoryReport.reduce((a, b) => a + b.sold, 0);
-  const outOfStock = inventoryReport.filter(i => i.inStock === 0).length;
+
+  // Calculate units sold per product from transaction items
+  const soldMap = useMemo(() => {
+    const m: Record<string, number> = {};
+    transactions.forEach(t => {
+      t.items?.forEach(item => {
+        m[item.productId] = (m[item.productId] ?? 0) + item.quantity;
+      });
+    });
+    return m;
+  }, [transactions]);
+
+  const filtered = products.filter(p =>
+    p.name.toLowerCase().includes(search.toLowerCase()) ||
+    p.category.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const totalValue = products.reduce((s, p) => s + p.price * p.stock, 0);
+  const outOfStock = products.filter(p => p.stock === 0).length;
+  const lowStock = products.filter(p => p.stock > 0 && p.stock <= 5).length;
+  const totalSold = Object.values(soldMap).reduce((s, v) => s + v, 0);
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Total Stock Value" value={`OMR ${totalValue.toFixed(2)}`} change={`${inventoryReport.length} products`} changeType="positive" icon={DollarSign} iconColor="bg-primary" />
-        <StatCard title="Total In Stock" value={totalInStock.toLocaleString()} change="units available" changeType="positive" icon={Package} iconColor="bg-success" />
-        <StatCard title="Total Sold" value={totalSold.toLocaleString()} change="units sold" changeType="positive" icon={ShoppingCart} iconColor="bg-info" />
-        <StatCard title="Out of Stock" value={outOfStock.toString()} change="items need restock" changeType="negative" icon={Warehouse} iconColor="bg-destructive" />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <Stat label="Stock Value" value={fmt(totalValue)} sub={`${products.length} products`} />
+        <Stat label="Total Sold (All Time)" value={totalSold.toString()} sub="units from transactions" />
+        <Stat label="Out of Stock" value={outOfStock.toString()} sub="need restocking" />
+        <Stat label="Low Stock (≤5)" value={lowStock.toString()} sub="running low" />
       </div>
+
       <div className="bg-card rounded-xl border border-border p-5 shadow-sm">
         <div className="flex items-center justify-between mb-4">
-          <h4 className="text-base font-semibold text-card-foreground">Inventory Report</h4>
+          <h4 className="text-base font-bold text-card-foreground">Product Inventory</h4>
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search product..." className="pl-9 pr-4 py-2 rounded-lg border border-border bg-background text-sm text-foreground w-64 focus:outline-none focus:ring-2 focus:ring-primary/30" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search product..."
+              className="pl-8 pr-3 py-1.5 rounded-lg border border-border bg-background text-xs text-foreground w-48 focus:outline-none focus:ring-2 focus:ring-primary/30"
+            />
           </div>
         </div>
         <div className="overflow-auto max-h-[500px] pos-scrollbar">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Product Name</TableHead>
-                <TableHead className="text-right">Stock Value</TableHead>
+                <TableHead>Product</TableHead>
+                <TableHead>Category</TableHead>
+                <TableHead className="text-right">Price</TableHead>
                 <TableHead className="text-right">In Stock</TableHead>
                 <TableHead className="text-right">Sold</TableHead>
-                <TableHead className="text-right">Missing</TableHead>
-                <TableHead className="text-right">Expired</TableHead>
+                <TableHead className="text-right">Stock Value</TableHead>
                 <TableHead>Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((item, i) => (
-                <TableRow key={i}>
-                  <TableCell className="font-medium text-foreground">{item.name}</TableCell>
-                  <TableCell className="text-right">OMR {item.totalStockValue.toFixed(2)}</TableCell>
-                  <TableCell className="text-right">{item.inStock}</TableCell>
-                  <TableCell className="text-right">{item.sold}</TableCell>
-                  <TableCell className="text-right">{item.missing}</TableCell>
-                  <TableCell className="text-right">{item.expired}</TableCell>
+              {filtered.map(p => (
+                <TableRow key={p.id}>
+                  <TableCell className="font-medium text-foreground text-xs">{p.name}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground">{p.category}</TableCell>
+                  <TableCell className="text-right text-xs">{p.price.toFixed(3)}</TableCell>
+                  <TableCell className="text-right text-xs font-bold">{p.stock}</TableCell>
+                  <TableCell className="text-right text-xs text-primary font-bold">{soldMap[p.id] ?? 0}</TableCell>
+                  <TableCell className="text-right text-xs font-bold">{fmt(p.price * p.stock)}</TableCell>
                   <TableCell>
-                    {item.inStock === 0 ? (
-                      <Badge variant="destructive" className="text-[10px]">Out of Stock</Badge>
-                    ) : item.inStock <= 3 ? (
-                      <Badge variant="outline" className="text-[10px] border-warning text-warning">Low Stock</Badge>
-                    ) : (
-                      <Badge variant="outline" className="text-[10px] border-success text-success">In Stock</Badge>
-                    )}
+                    {p.stock === 0
+                      ? <Badge variant="destructive" className="text-[10px]">Out of Stock</Badge>
+                      : p.stock <= 5
+                        ? <Badge variant="outline" className="text-[10px] border-amber-400 text-amber-600">Low Stock</Badge>
+                        : <Badge variant="outline" className="text-[10px] border-green-400 text-green-600">In Stock</Badge>
+                    }
                   </TableCell>
                 </TableRow>
               ))}
@@ -194,359 +599,155 @@ const InventoryTab = () => {
   );
 };
 
-const CustomerCreditTab = () => {
-  const [view, setView] = useState<'period' | 'alltime'>('period');
-  const data = view === 'period' ? creditCustomersPeriod : creditCustomersAllTime;
-  const totalDebt = data.reduce((a, b) => a + b.totalDebt, 0);
-  const totalSpent = data.reduce((a, b) => a + b.totalSpent, 0);
+// ─── ANALYTICS TAB ────────────────────────────────────────────────────────────
+const AnalyticsTab = ({ transactions }: { transactions: Transaction[] }) => {
+  // Top products by revenue
+  const productRevenue: Record<string, { name: string; qty: number; revenue: number }> = {};
+  transactions.forEach(t => {
+    t.items?.forEach(item => {
+      if (!productRevenue[item.productId]) {
+        productRevenue[item.productId] = { name: item.productName, qty: 0, revenue: 0 };
+      }
+      productRevenue[item.productId].qty += item.quantity;
+      productRevenue[item.productId].revenue += item.total;
+    });
+  });
+  const topProducts = Object.values(productRevenue)
+    .sort((a, b) => b.revenue - a.revenue)
+    .slice(0, 10);
+
+  // Hourly distribution
+  const hourly: Record<number, number> = {};
+  for (let h = 0; h < 24; h++) hourly[h] = 0;
+  transactions.forEach(t => {
+    const h = new Date(t.date).getHours();
+    hourly[h] = (hourly[h] ?? 0) + 1;
+  });
+  const hourlyData = Object.entries(hourly)
+    .filter(([h]) => Number(h) >= 6 && Number(h) <= 22)
+    .map(([h, count]) => ({ hour: `${h}:00`, count }));
 
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <StatCard title="Total Debt" value={`OMR ${totalDebt.toFixed(2)}`} change={`${data.length} customers`} changeType="negative" icon={CreditCard} iconColor="bg-destructive" />
-        <StatCard title="Total Spent" value={`OMR ${totalSpent.toFixed(2)}`} change="by credit customers" changeType="positive" icon={DollarSign} iconColor="bg-success" />
-        <StatCard title="Customers with Debt" value={data.filter(c => c.totalDebt > 0).length.toString()} change="outstanding balances" changeType="negative" icon={Users} iconColor="bg-warning" />
+    <div className="space-y-6">
+      {/* Top products bar chart */}
+      <div className="bg-card rounded-xl border border-border p-5 shadow-sm">
+        <h4 className="text-base font-bold text-card-foreground mb-4">Top Products by Revenue</h4>
+        {topProducts.length === 0 ? (
+          <div className="h-40 flex items-center justify-center text-muted-foreground text-sm">No sales data yet</div>
+        ) : (
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={topProducts} layout="vertical">
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(220,13%,91%)" />
+              <XAxis type="number" tick={{ fontSize: 10 }} />
+              <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={120} />
+              <Tooltip formatter={(v: number) => [`OMR ${v.toFixed(3)}`, 'Revenue']} />
+              <Bar dataKey="revenue" fill="#3b82f6" radius={[0, 6, 6, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        )}
       </div>
 
+      {/* Busiest hours */}
       <div className="bg-card rounded-xl border border-border p-5 shadow-sm">
-        <div className="flex items-center justify-between mb-4">
-          <h4 className="text-base font-semibold text-card-foreground">Customer Credit Report</h4>
-          <div className="flex gap-2">
-            <button onClick={() => setView('period')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${view === 'period' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'}`}>
-              09 Jul – 09 Aug 2024
-            </button>
-            <button onClick={() => setView('alltime')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${view === 'alltime' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'}`}>
-              All Time
-            </button>
-          </div>
-        </div>
-        <div className="overflow-auto max-h-[500px] pos-scrollbar">
+        <h4 className="text-base font-bold text-card-foreground mb-4">Busiest Hours (Transactions)</h4>
+        {transactions.length === 0 ? (
+          <div className="h-40 flex items-center justify-center text-muted-foreground text-sm">No data yet</div>
+        ) : (
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={hourlyData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(220,13%,91%)" />
+              <XAxis dataKey="hour" tick={{ fontSize: 10 }} />
+              <YAxis tick={{ fontSize: 10 }} />
+              <Tooltip />
+              <Bar dataKey="count" fill="#10b981" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+
+      {/* Top products table */}
+      {topProducts.length > 0 && (
+        <div className="bg-card rounded-xl border border-border p-5 shadow-sm">
+          <h4 className="text-base font-bold text-card-foreground mb-4">Top 10 Products Detail</h4>
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>#</TableHead>
-                <TableHead>Customer Name</TableHead>
-                <TableHead>Phone</TableHead>
-                <TableHead className="text-right">Total Debt (OMR)</TableHead>
-                <TableHead className="text-right">Total Spent (OMR)</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data.map(c => (
-                <TableRow key={c.id}>
-                  <TableCell>{c.id}</TableCell>
-                  <TableCell className="font-medium text-foreground capitalize">{c.name}</TableCell>
-                  <TableCell className="text-muted-foreground">{c.phone}</TableCell>
-                  <TableCell className={`text-right font-semibold ${c.totalDebt > 0 ? 'text-destructive' : 'text-foreground'}`}>{c.totalDebt.toFixed(2)}</TableCell>
-                  <TableCell className="text-right">{c.totalSpent.toFixed(2)}</TableCell>
-                </TableRow>
-              ))}
-              <TableRow className="bg-muted/50 font-bold">
-                <TableCell colSpan={3} className="text-right">Total</TableCell>
-                <TableCell className="text-right text-destructive">{totalDebt.toFixed(2)}</TableCell>
-                <TableCell className="text-right">{totalSpent.toFixed(2)}</TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const PurchaseOrderTab = () => {
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const totalAmount = purchaseOrders.reduce((a, b) => a + b.amount, 0);
-  const totalItems = purchaseOrders.reduce((a, b) => a + b.totalItems, 0);
-
-  return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <StatCard title="Total Orders" value={purchaseOrders.length.toString()} change="purchase orders" changeType="positive" icon={ClipboardList} iconColor="bg-primary" />
-        <StatCard title="Total Items" value={totalItems.toLocaleString()} change="items ordered" changeType="positive" icon={Package} iconColor="bg-info" />
-        <StatCard title="Total Amount" value={`OMR ${totalAmount.toFixed(2)}`} change="spent on purchases" changeType="negative" icon={DollarSign} iconColor="bg-warning" />
-      </div>
-      <div className="bg-card rounded-xl border border-border p-5 shadow-sm space-y-2">
-        <h4 className="text-base font-semibold text-card-foreground mb-4">Purchase Order Report</h4>
-        {purchaseOrders.map(po => (
-          <div key={po.id} className="border border-border rounded-lg overflow-hidden">
-            <button onClick={() => setExpandedId(expandedId === po.id ? null : po.id)} className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/50 transition-colors">
-              <div className="flex items-center gap-4 text-sm">
-                {expandedId === po.id ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
-                <span className="font-mono font-semibold text-primary">{po.id}</span>
-                <span className="text-muted-foreground">{po.supplier}</span>
-                <Badge variant="outline" className="text-[10px]">{po.status}</Badge>
-              </div>
-              <div className="flex items-center gap-6 text-sm">
-                <span className="text-muted-foreground">{po.date}</span>
-                <span className="font-semibold text-foreground">{po.totalItems} items</span>
-                <span className="font-bold text-foreground">OMR {po.amount.toFixed(2)}</span>
-              </div>
-            </button>
-            {expandedId === po.id && (
-              <div className="border-t border-border bg-muted/30 px-4 py-3">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Product</TableHead>
-                      <TableHead className="text-right">Sale Price</TableHead>
-                      <TableHead className="text-right">Unit Cost</TableHead>
-                      <TableHead className="text-right">Qty</TableHead>
-                      <TableHead className="text-right">Total Cost</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {po.items.map((item, i) => (
-                      <TableRow key={i}>
-                        <TableCell className="font-medium">{item.productName}</TableCell>
-                        <TableCell className="text-right">{item.salePrice.toFixed(3)}</TableCell>
-                        <TableCell className="text-right">{item.unitCost.toFixed(3)}</TableCell>
-                        <TableCell className="text-right">{item.quantity}</TableCell>
-                        <TableCell className="text-right font-semibold">{item.totalCost.toFixed(3)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-const TransactionsTab = () => {
-  const [search, setSearch] = useState('');
-  const filtered = transactionsReport.filter(t => t.description.toLowerCase().includes(search.toLowerCase()) || t.id.toLowerCase().includes(search.toLowerCase()));
-  const totalRevenue = transactionsReport.reduce((a, b) => a + b.revenue, 0);
-  const totalProfit = transactionsReport.reduce((a, b) => a + b.profit, 0);
-
-  return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <StatCard title="Total Transactions" value={transactionsReport.length.toString()} change="transactions" changeType="positive" icon={ShoppingCart} iconColor="bg-primary" />
-        <StatCard title="Total Revenue" value={`OMR ${totalRevenue.toFixed(2)}`} change="from transactions" changeType="positive" icon={DollarSign} iconColor="bg-success" />
-        <StatCard title="Total Profit" value={`OMR ${totalProfit.toFixed(2)}`} change="net profit" changeType="positive" icon={TrendingUp} iconColor="bg-info" />
-      </div>
-      <div className="bg-card rounded-xl border border-border p-5 shadow-sm">
-        <div className="flex items-center justify-between mb-4">
-          <h4 className="text-base font-semibold text-card-foreground">Transactions Report</h4>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search transaction..." className="pl-9 pr-4 py-2 rounded-lg border border-border bg-background text-sm text-foreground w-64 focus:outline-none focus:ring-2 focus:ring-primary/30" />
-          </div>
-        </div>
-        <div className="overflow-auto max-h-[500px] pos-scrollbar">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>ID</TableHead>
-                <TableHead>Customer</TableHead>
-                <TableHead>Item</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Payment</TableHead>
-                <TableHead className="text-right">Price</TableHead>
-                <TableHead className="text-right">Qty</TableHead>
+                <TableHead>Product</TableHead>
+                <TableHead className="text-right">Units Sold</TableHead>
                 <TableHead className="text-right">Revenue</TableHead>
-                <TableHead className="text-right">Cost</TableHead>
-                <TableHead className="text-right">Profit</TableHead>
-                <TableHead>Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map(t => (
-                <TableRow key={`${t.id}-${t.barcode}`}>
-                  <TableCell className="font-mono text-xs text-primary">{t.id}</TableCell>
-                  <TableCell className="text-muted-foreground text-xs">{t.customer}</TableCell>
-                  <TableCell className="font-medium text-xs">{t.description}</TableCell>
-                  <TableCell className="text-muted-foreground text-xs">{t.date}</TableCell>
-                  <TableCell><Badge variant="outline" className="text-[10px]">{t.paymentType}</Badge></TableCell>
-                  <TableCell className="text-right text-xs">{t.salePrice.toFixed(2)}</TableCell>
-                  <TableCell className="text-right text-xs">{t.quantity}</TableCell>
-                  <TableCell className="text-right text-xs font-semibold">{t.revenue.toFixed(2)}</TableCell>
-                  <TableCell className="text-right text-xs">{t.cost.toFixed(2)}</TableCell>
-                  <TableCell className="text-right text-xs font-semibold text-success">{t.profit.toFixed(2)}</TableCell>
-                  <TableCell><Badge variant="outline" className="text-[10px] border-success text-success">{t.status}</Badge></TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const RefundsTab = () => {
-  const totalRefundRevenue = refundsReport.reduce((a, b) => a + b.revenue, 0);
-  const totalRefundLoss = refundsReport.reduce((a, b) => a + b.profit, 0);
-
-  return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <StatCard title="Total Refunds" value={refundsReport.length.toString()} change="refund transactions" changeType="negative" icon={RotateCcw} iconColor="bg-destructive" />
-        <StatCard title="Refund Amount" value={`OMR ${totalRefundRevenue.toFixed(2)}`} change="total refunded" changeType="negative" icon={DollarSign} iconColor="bg-warning" />
-        <StatCard title="Profit Lost" value={`OMR ${totalRefundLoss.toFixed(2)}`} change="from refunds" changeType="negative" icon={TrendingUp} iconColor="bg-destructive" />
-      </div>
-      <div className="bg-card rounded-xl border border-border p-5 shadow-sm">
-        <h4 className="text-base font-semibold text-card-foreground mb-4">Refund Report</h4>
-        <div className="overflow-auto max-h-[500px] pos-scrollbar">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>ID</TableHead>
-                <TableHead>Customer</TableHead>
-                <TableHead>Item</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead className="text-right">Price</TableHead>
-                <TableHead className="text-right">Qty</TableHead>
-                <TableHead className="text-right">Revenue</TableHead>
-                <TableHead className="text-right">Cost</TableHead>
-                <TableHead className="text-right">Profit</TableHead>
-                <TableHead>Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {refundsReport.map(r => (
-                <TableRow key={`${r.id}-${r.description}`}>
-                  <TableCell className="font-mono text-xs text-primary">{r.id}</TableCell>
-                  <TableCell className="text-muted-foreground text-xs">{r.customer}</TableCell>
-                  <TableCell className="font-medium text-xs">{r.description}</TableCell>
-                  <TableCell className="text-muted-foreground text-xs">{r.date}</TableCell>
-                  <TableCell className="text-right text-xs">{r.salePrice.toFixed(2)}</TableCell>
-                  <TableCell className="text-right text-xs">{r.quantity}</TableCell>
-                  <TableCell className="text-right text-xs font-semibold">{r.revenue.toFixed(2)}</TableCell>
-                  <TableCell className="text-right text-xs">{r.cost.toFixed(2)}</TableCell>
-                  <TableCell className="text-right text-xs font-semibold text-destructive">{r.profit.toFixed(2)}</TableCell>
+              {topProducts.map((p, i) => (
+                <TableRow key={p.name}>
                   <TableCell>
-                    <Badge variant={r.status === 'Refunded' ? 'destructive' : 'outline'} className="text-[10px]">
-                      {r.status}
-                    </Badge>
+                    <span className="w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-black flex items-center justify-center">{i + 1}</span>
                   </TableCell>
+                  <TableCell className="font-medium text-foreground text-sm">{p.name}</TableCell>
+                  <TableCell className="text-right text-sm font-bold">{p.qty}</TableCell>
+                  <TableCell className="text-right text-sm font-black text-primary">{fmt(p.revenue)}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         </div>
-      </div>
+      )}
     </div>
   );
 };
 
-const AnalyticsTab = () => (
-  <div className="space-y-6">
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-      <StatCard title="Monthly Revenue" value="OMR 4,698.07" change="+8.1% vs last month" changeType="positive" icon={DollarSign} iconColor="bg-primary" />
-      <StatCard title="Monthly Profit" value="OMR 1,563.00" change="+5.2% vs last month" changeType="positive" icon={TrendingUp} iconColor="bg-success" />
-      <StatCard title="Avg. Order Value" value="OMR 0.72" change="per transaction" changeType="positive" icon={ShoppingCart} iconColor="bg-warning" />
-      <StatCard title="Items Sold" value="20,147" change="+12.3% vs last month" changeType="positive" icon={Package} iconColor="bg-info" />
-    </div>
-    <div className="bg-card rounded-xl border border-border p-5 shadow-sm">
-      <h3 className="text-base font-semibold text-card-foreground mb-4">Revenue vs Profit</h3>
-      <ResponsiveContainer width="100%" height={320}>
-        <AreaChart data={profitData}>
-          <CartesianGrid strokeDasharray="3 3" stroke="hsl(220, 13%, 91%)" />
-          <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="hsl(220, 10%, 46%)" />
-          <YAxis tick={{ fontSize: 12 }} stroke="hsl(220, 10%, 46%)" />
-          <Tooltip contentStyle={{ borderRadius: '8px', border: '1px solid hsl(220, 13%, 91%)', fontSize: '12px' }} />
-          <Area type="monotone" dataKey="revenue" stackId="1" stroke="hsl(217, 91%, 50%)" fill="hsl(217, 91%, 50%)" fillOpacity={0.15} strokeWidth={2} />
-          <Area type="monotone" dataKey="profit" stackId="2" stroke="hsl(160, 84%, 39%)" fill="hsl(160, 84%, 39%)" fillOpacity={0.15} strokeWidth={2} />
-        </AreaChart>
-      </ResponsiveContainer>
-    </div>
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      <div className="bg-card rounded-xl border border-border p-5 shadow-sm">
-        <h3 className="text-base font-semibold text-card-foreground mb-4">Monthly Sales Trend</h3>
-        <ResponsiveContainer width="100%" height={280}>
-          <LineChart data={monthlySalesData}>
-            <CartesianGrid strokeDasharray="3 3" stroke="hsl(220, 13%, 91%)" />
-            <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="hsl(220, 10%, 46%)" />
-            <YAxis tick={{ fontSize: 12 }} stroke="hsl(220, 10%, 46%)" />
-            <Tooltip contentStyle={{ borderRadius: '8px', border: '1px solid hsl(220, 13%, 91%)', fontSize: '12px' }} />
-            <Line type="monotone" dataKey="sales" stroke="hsl(217, 91%, 50%)" strokeWidth={2.5} dot={{ fill: 'hsl(217, 91%, 50%)', r: 4 }} />
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
-      <div className="bg-card rounded-xl border border-border p-5 shadow-sm">
-        <h3 className="text-base font-semibold text-card-foreground mb-4">Daily Orders This Week</h3>
-        <ResponsiveContainer width="100%" height={280}>
-          <BarChart data={dailySalesData}>
-            <CartesianGrid strokeDasharray="3 3" stroke="hsl(220, 13%, 91%)" />
-            <XAxis dataKey="day" tick={{ fontSize: 12 }} stroke="hsl(220, 10%, 46%)" />
-            <YAxis tick={{ fontSize: 12 }} stroke="hsl(220, 10%, 46%)" />
-            <Tooltip contentStyle={{ borderRadius: '8px', border: '1px solid hsl(220, 13%, 91%)', fontSize: '12px' }} />
-            <Bar dataKey="orders" fill="hsl(160, 84%, 39%)" radius={[6, 6, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-    </div>
-    <div className="bg-card rounded-xl border border-border p-5 shadow-sm">
-      <h3 className="text-base font-semibold text-card-foreground mb-4">Top Selling Products</h3>
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-border">
-            <th className="text-left py-3 font-medium text-muted-foreground">#</th>
-            <th className="text-left py-3 font-medium text-muted-foreground">Product</th>
-            <th className="text-right py-3 font-medium text-muted-foreground">Quantity Sold</th>
-            <th className="text-right py-3 font-medium text-muted-foreground">Revenue</th>
-          </tr>
-        </thead>
-        <tbody>
-          {topSellingProducts.map((p, i) => (
-            <tr key={p.name} className="border-b border-border last:border-0">
-              <td className="py-3"><span className="w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center">{i + 1}</span></td>
-              <td className="py-3 font-medium text-foreground">{p.name}</td>
-              <td className="py-3 text-right text-muted-foreground">{p.sold}</td>
-              <td className="py-3 text-right font-semibold text-foreground">OMR {p.revenue}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  </div>
-);
+// ─── TABS CONFIG ──────────────────────────────────────────────────────────────
+const TABS = [
+  { id: 'summary', label: 'Summary', icon: FileText },
+  { id: 'transactions', label: 'Transactions', icon: ShoppingCart },
+  { id: 'credit', label: 'Customer Credit', icon: CreditCard },
+  { id: 'inventory', label: 'Inventory', icon: Package },
+  { id: 'analytics', label: 'Analytics', icon: TrendingUp },
+];
 
-// ============ MAIN COMPONENT ============
-
+// ─── MAIN ─────────────────────────────────────────────────────────────────────
 const Reports = () => {
   const [activeTab, setActiveTab] = useState('summary');
-
-  const renderTab = () => {
-    switch (activeTab) {
-      case 'summary': return <DigitalSummaryTab />;
-      case 'inventory': return <InventoryTab />;
-      case 'credit': return <CustomerCreditTab />;
-      case 'purchase': return <PurchaseOrderTab />;
-      case 'transactions': return <TransactionsTab />;
-      case 'refunds': return <RefundsTab />;
-      case 'analytics': return <AnalyticsTab />;
-      default: return <DigitalSummaryTab />;
-    }
-  };
+  const { transactions, customers, products, loading, refetch } = useReportData();
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 md:p-6 space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Reports & Analytics</h1>
-          <p className="text-sm text-muted-foreground">Comprehensive business reports – B-HUB POS</p>
+          <h1 className="text-2xl font-black text-foreground">Reports & Analytics</h1>
+          <p className="text-sm text-muted-foreground">Live data from your JABALSHAMS POS</p>
         </div>
-        <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-secondary text-secondary-foreground text-sm font-medium hover:bg-muted transition-colors">
-          <Download className="w-4 h-4" /> Export Report
+        <button
+          onClick={refetch}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-white text-sm font-bold hover:brightness-110 transition-all shadow-sm"
+        >
+          <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />
+          Refresh
         </button>
       </div>
 
+      {/* Loading state */}
+      {loading && (
+        <div className="flex items-center justify-center py-8 gap-3 text-muted-foreground">
+          <RefreshCw className="w-5 h-5 animate-spin" />
+          <span className="text-sm font-medium">Loading live data...</span>
+        </div>
+      )}
+
       {/* Tabs */}
       <div className="flex flex-wrap gap-1 bg-muted/50 p-1 rounded-xl border border-border">
-        {tabs.map(tab => (
+        {TABS.map(tab => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium transition-all ${activeTab === tab.id
-                ? 'bg-primary text-primary-foreground shadow-sm'
+            className={cn(
+              'flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all',
+              activeTab === tab.id
+                ? 'bg-primary text-white shadow-sm'
                 : 'text-muted-foreground hover:text-foreground hover:bg-background'
-              }`}
+            )}
           >
             <tab.icon className="w-3.5 h-3.5" />
             {tab.label}
@@ -554,7 +755,16 @@ const Reports = () => {
         ))}
       </div>
 
-      {renderTab()}
+      {/* Tab content */}
+      {!loading && (
+        <>
+          {activeTab === 'summary' && <SummaryTab transactions={transactions} customers={customers} />}
+          {activeTab === 'transactions' && <TransactionsTab transactions={transactions} customers={customers} />}
+          {activeTab === 'credit' && <CustomerCreditTab customers={customers} transactions={transactions} />}
+          {activeTab === 'inventory' && <InventoryTab products={products} transactions={transactions} />}
+          {activeTab === 'analytics' && <AnalyticsTab transactions={transactions} />}
+        </>
+      )}
     </div>
   );
 };
