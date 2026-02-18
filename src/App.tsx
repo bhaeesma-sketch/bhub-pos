@@ -20,7 +20,6 @@ import { useStaffSession } from "./contexts/StaffContext";
 import { useState } from "react";
 import { KhatLedger } from "./components/bhub/KhatLedger";
 import { OwnerRemoteDashboard } from "./components/bhub/OwnerRemoteDashboard";
-import Audit from "./pages/Audit";
 import NotFound from "./pages/NotFound";
 import MasterControl from "./pages/MasterControl";
 
@@ -93,7 +92,6 @@ const RootRouter = () => {
         <Route path="/purchases" element={<Purchases />} />
         <Route path="/owner" element={<OwnerDashboard />} />
         <Route path="/settings" element={<SettingsPage />} />
-        <Route path="/audit" element={<Audit />} />
 
         {/* Integrated Cloud Features */}
         <Route path="/bhub" element={<Navigate to="/bhub/khat" replace />} />
