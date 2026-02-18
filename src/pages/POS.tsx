@@ -536,7 +536,6 @@ const POS = () => {
       id: item.id,
       name: item.name,
       price: item.price,
-      cost: 0,
       stock: 9999,
       barcode: '',
       sku: '',
@@ -574,11 +573,13 @@ const POS = () => {
 
   const subtotal = cart.reduce((sum, item) => {
     const itemTotal = item.product.price * item.quantity;
-    const itemDiscountAmt = (itemTotal * item.discount) / 100;
+    // item.discount is now a flat OMR amount (not %)
+    const itemDiscountAmt = Math.min(item.discount, itemTotal);
     return sum + (itemTotal - itemDiscountAmt);
   }, 0);
-  const discountAmount = (subtotal * cartDiscount) / 100;
-  // VAT is now INCLUDED in the price. 
+  // cartDiscount is now a flat OMR amount (not %)
+  const discountAmount = Math.min(cartDiscount, subtotal);
+  // VAT is now INCLUDED in the price.
   // Formula for extraction from Gross: VAT = Gross * (Rate / (100 + Rate))
   const total = subtotal - discountAmount;
   const taxAmount = total * (5 / 105);
@@ -1044,8 +1045,8 @@ const POS = () => {
               </div>
             </div>
 
-            {/* Left: Product Grid (75%) */}
-            <div className="flex-1 flex flex-col min-w-0 bg-[#F1F5F9]">
+            {/* Left: Product Grid */}
+            <div className="flex-1 flex flex-col min-w-0 bg-[#F1F5F9] pb-20 md:pb-0">
               <ProductGrid
                 products={filteredProducts}
                 addToCart={addToCart}
@@ -1110,8 +1111,8 @@ const POS = () => {
 
           </div>
 
-          {/* Cart Sidebar */}
-          <div className="w-[380px] lg:w-[450px] flex-none border-l border-slate-200 bg-white flex flex-col items-stretch relative shadow-lg z-10 transition-all duration-300">
+          {/* Cart Sidebar — responsive: hidden on mobile (uses FAB), 300px on tablet, 360px on desktop */}
+          <div className="hidden md:flex w-[300px] xl:w-[360px] flex-none border-l border-slate-200 bg-white flex-col items-stretch relative shadow-lg z-10 transition-all duration-300">
             {/* Cart Header - Dukkantek Style Transaction Bar */}
             <div className="flex-none p-4 bg-slate-900 text-white shadow-xl relative z-10">
               <div className="flex items-center justify-between mb-2">
@@ -1159,7 +1160,7 @@ const POS = () => {
                 </div>
               ) : (
                 cart.map((item) => {
-                  const itemFinal = (item.product.price * (1 - item.discount / 100)) * item.quantity;
+                  const itemFinal = (item.product.price * item.quantity) - Math.min(item.discount, item.product.price * item.quantity);
                   return (
                     <motion.div
                       layout
@@ -1183,21 +1184,22 @@ const POS = () => {
                           <button onClick={() => updateQuantity(item.product.id, 1)} className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-all font-black text-slate-900">+</button>
                         </div>
                         <div className="flex items-center gap-1">
-                          {/* Discount button */}
+                          {/* Discount button — flat OMR amount */}
                           <button
                             onClick={() => {
-                              const d = prompt(`Discount % for ${item.product.name}:`, String(item.discount || 0));
+                              const d = prompt(`Discount (OMR) for ${item.product.name}\nMax: ${(item.product.price * item.quantity).toFixed(3)}`, String(item.discount || ''));
                               if (d !== null) {
-                                const val = Math.min(100, Math.max(0, Number(d) || 0));
+                                const maxDiscount = item.product.price * item.quantity;
+                                const val = Math.min(maxDiscount, Math.max(0, parseFloat(d) || 0));
                                 setCart(prev => prev.map(ci =>
-                                  ci.product.id === item.product.id ? { ...ci, discount: val } : ci
+                                  ci.product.id === item.product.id ? { ...ci, discount: +val.toFixed(3) } : ci
                                 ));
                               }
                             }}
                             className="flex items-center gap-0.5 px-2 h-7 rounded-lg bg-amber-50 border border-amber-200 text-amber-600 hover:bg-amber-100 transition-all text-[10px] font-black"
-                            title="Set item discount"
+                            title="Set item discount (OMR)"
                           >
-                            %{item.discount > 0 ? item.discount : ''}
+                            {item.discount > 0 ? `-${item.discount.toFixed(3)}` : 'DISC'}
                           </button>
                           {/* Delete button */}
                           <button onClick={() => removeFromCart(item.product.id)} className="w-7 h-7 rounded-lg bg-red-50 border border-red-200 flex items-center justify-center text-destructive hover:bg-red-100 transition-colors">
@@ -1220,7 +1222,7 @@ const POS = () => {
                 </div>
                 {cartDiscount > 0 && (
                   <div className="flex justify-between text-[10px] font-black text-primary uppercase tracking-widest">
-                    <span>Discount ({cartDiscount}%)</span>
+                    <span>Cart Discount</span>
                     <span>-OMR {discountAmount.toFixed(3)}</span>
                   </div>
                 )}
@@ -1338,7 +1340,7 @@ const POS = () => {
                     <div className="space-y-1">
                       {belowCostItems.map(i => (
                         <p key={i.product.id} className="text-[10px] text-destructive">
-                          {i.product.name}: price OMR {i.product.price.toFixed(3)} &lt; cost OMR {Number(i.product.cost).toFixed(3)}
+                          {i.product.name}: OMR {i.product.price.toFixed(3)}
                         </p>
                       ))}
                     </div>
